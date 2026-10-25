@@ -2,6 +2,7 @@
 //   g++ -std=gnu++17 -O2 -Iplugins/Shared -Iplugins/Lumen -Idpf/distrho plugins/Lumen/tests/test_lumen.cpp plugins/Shared/Export.cpp -o test_lumen && ./test_lumen out [trims.txt]
 #include "LumenDSP.hpp"
 #include "Export.hpp"
+#include "LumenOwn.hpp"
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -351,6 +352,102 @@ int main(int argc, char** argv)
         e->p[kPlay] = 0; std::vector<float> L; run(*e, 0.4, &L, { { 0, 0xB0, 120, 0 } });
         float tail = 0; for (size_t i = 1024; i < L.size(); ++i) tail = std::max(tail, std::fabs(L[i]));
         check(tail < 1e-6f, "MIDI All Sound Off (CC 120) also cuts everything");
+    }
+    // ---- 1.3: 32 sections share a pool of effect chains
+    {
+        auto corr = [](const std::vector<float>& a, const std::vector<float>& b, size_t from, size_t to) {
+            double ab = 0, aa = 0, bb = 0; for (size_t i = from; i < to && i < a.size() && i < b.size(); ++i) { ab += (double)a[i] * b[i]; aa += (double)a[i] * a[i]; bb += (double)b[i] * b[i]; }
+            return ab / std::sqrt(std::max(1e-12, aa * bb)); };
+        auto find = [](const char* n) { for (int i = 0; i < kNumPresets; ++i) if (!std::strcmp(kPresets[i].name, n)) return i; return -1; };
+        const int A = find("Lowpass Muffle"), B = find("Telephone");   // two sounds without LFOs: each section must match its sound alone
+        std::unique_ptr<LumenEngine> e(new LumenEngine()); e->setSampleRate(44100); e->setSample(&src);
+        e->p[kLoop] = 0; e->p[kTlOn] = 1; e->p[kTlCount] = 32; e->p[kTlTails] = 1;
+        for (int k = 0; k < 32; ++k) { e->p[slotParam(k, kSfSound)] = (float)(k % 2 ? B : A); e->p[slotParam(k, kSfStart)] = k / 32.0f; e->p[slotParam(k, kSfFade)] = 0;
+                                       for (int m = 0; m < 4; ++m) e->p[slotParam(k, kSfM1 + m)] = presetAt(k % 2 ? B : A).mdef[m]; }
+        e->p[kPlay] = 1;
+        std::vector<float> T; const auto t0 = std::chrono::steady_clock::now(); const Stats st = run(*e, 8.0, &T);
+        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        // each section alone for comparison
+        auto alone = [&](int snd) { std::unique_ptr<LumenEngine> f(new LumenEngine()); f->setSampleRate(44100); f->setSample(&src);
+            float pv[kParamCount]; presetValues(snd, pv); for (uint32_t i = 0; i < kNumIn; ++i) f->p[i] = pv[i]; f->p[kLoop] = 0; f->p[kPlay] = 1; std::vector<float> o; run(*f, 8.0, &o); return o; };
+        const std::vector<float> RA = alone(A), RB = alone(B);
+        int good = 0;
+        for (int k = 0; k < 32; ++k) {   // the middle of every 0.25 s section must sound like its own sound
+            const size_t a = (size_t)((k + 0.3) * 0.25 * 44100), b = (size_t)((k + 0.7) * 0.25 * 44100);
+            const double ca = corr(T, RA, a, b), cb = corr(T, RB, a, b);
+            if ((k % 2 ? cb > ca + 0.3 : ca > cb + 0.3) && std::max(ca, cb) > 0.6) ++good;   // clearly its own sound (quiet bits correlate less)
+            if (std::getenv("LUMEN_DEBUG")) std::printf("        section %2d: A %.3f  B %.3f\n", k + 1, ca, cb);
+        }
+        std::printf("      32 sections: %d of 32 sound like their own sound, %.1f %% of one core\n", good, el / 8.0 * 100);
+        check(st.finite && good == 32 && el / 8.0 < 0.3, "TIMELINE with 32 sections: every section plays its own sound, CPU stays low");
+    }
+    // ---- 1.3: a section's own edits (EDIT page with the timeline on) change only that section
+    {
+        auto find = [](const char* n) { for (int i = 0; i < kNumPresets; ++i) if (!std::strcmp(kPresets[i].name, n)) return i; return -1; };
+        const int A = find("Clean Polish");
+        auto render = [&](const float (*ov)[kNumEdit]) {
+            std::unique_ptr<LumenEngine> e(new LumenEngine()); e->setSampleRate(44100); e->setSample(&src);
+            e->p[kLoop] = 0; e->p[kTlOn] = 1; e->p[kTlCount] = 2; e->p[kTlTails] = 1;
+            for (int k = 0; k < 2; ++k) { e->p[slotParam(k, kSfSound)] = (float)A; e->p[slotParam(k, kSfStart)] = k * 0.5f; e->p[slotParam(k, kSfFade)] = 0;
+                                          for (int m = 0; m < 4; ++m) e->p[slotParam(k, kSfM1 + m)] = presetAt(A).mdef[m]; }
+            EditBox box; if (ov) box.write(ov); e->setEditSource(&box);
+            e->p[kPlay] = 1; std::vector<float> o; run(*e, 8.0, &o); return o; };
+        float ov[kMaxSections][kNumEdit]; for (auto& r : ov) for (float& v : r) v = kNoEdit;
+        ov[1][kFOn - kEditFirst] = 1; ov[1][kFType - kEditFirst] = 0; ov[1][kFCut - kEditFirst] = 300; ov[1][kFRes - kEditFirst] = 0.1f;   // section 2: dark lowpass
+        const std::vector<float> plain = render(nullptr), edited = render(ov);
+        double d1 = 0, s1 = 0, d2 = 0, s2 = 0;
+        for (size_t i = 22050; i < 4 * 44100 - 4410; ++i) { d1 += (plain[i] - edited[i]) * (plain[i] - edited[i]); s1 += plain[i] * plain[i]; }
+        for (size_t i = 4 * 44100 + 4410; i < 8 * 44100 - 22050; ++i) { d2 += (plain[i] - edited[i]) * (plain[i] - edited[i]); s2 += plain[i] * plain[i]; }
+        std::printf("      section edits: section 1 changed %.3f, section 2 changed %.3f\n", std::sqrt(d1 / s1), std::sqrt(d2 / s2));
+        check(std::sqrt(d1 / s1) < 0.01 && std::sqrt(d2 / s2) > 0.3, "editing section 2 on the EDIT page changes section 2 only");
+        // the text format round-trips
+        const std::string t = editsToText(ov, kMaxSections); float back[kMaxSections][kNumEdit]; editsFromText(t.c_str(), back, kMaxSections);
+        check(std::memcmp(back, ov, sizeof ov) == 0 && t.find("1:f_on=1") == 0, "section edits survive saving and loading the project (" + t + ")");
+    }
+    // ---- 1.3: own presets
+    {
+        auto find = [](const char* n) { for (int i = 0; i < kNumPresets; ++i) if (!std::strcmp(kPresets[i].name, n)) return i; return -1; };
+        const int base = find("Cathedral");
+        float pv[kParamCount]; presetValues(base, pv);
+        pv[kDOn] = 1; pv[kDMode] = 3; pv[kDAmt] = 0.7f; pv[kM1] = 0.9f;   // an edited Cathedral with fuzz
+        const int idx = ownAdd("Fuzz Cathedral", pv, base);
+        check(idx >= kOwnBase && std::strcmp(presetAt(idx).name, "Fuzz Cathedral") == 0 && presetAt(idx).cat == kOwnCat, "save an own preset: it gets its own number, name and the OWN PRESETS category");
+        float ov2[kParamCount]; presetValues(idx, ov2);
+        bool same = true; for (uint32_t i = kEditFirst; i <= kEditLast; ++i) same &= std::fabs(ov2[i] - pv[i]) < 1e-5f;
+        check(same && std::fabs(ov2[kM1] - 0.9f) < 1e-5f && (int)ov2[kMacroSet] == idx && presetAt(idx).m[0].n == presetAt(base).m[0].n, "it loads back exactly, with the macros of the sound it came from");
+        std::string lib; gf::readTextFile(ownLibraryPath(), lib);
+        check(lib.find("|Fuzz Cathedral|") != std::string::npos, "it is written to Documents/Lumen/Own Presets.txt");
+        // a project carries a copy: simulate another computer (slot free) loading it
+        float proj[kParamCount]; for (uint32_t i = 0; i < kNumIn; ++i) proj[i] = getParamInfo(i).def;
+        proj[kMacroSet] = (float)idx;
+        const std::string copy = ownProjectText(proj);
+        OwnPreset& o = ownTable()[idx - kOwnBase]; o.state.store(0);
+        ownFromProject(copy.c_str());
+        check(ownAt(idx) && std::strcmp(presetAt(idx).name, "Fuzz Cathedral") == 0, "a project brings its own presets to a computer that doesn't have them");
+        o.state.store(1);
+        // it plays like the edited sound
+        std::unique_ptr<LumenEngine> a(new LumenEngine()), b(new LumenEngine());
+        for (auto* e : { a.get(), b.get() }) { e->setSampleRate(44100); e->setSample(&src); }
+        float pa[kParamCount]; presetValues(idx, pa); for (uint32_t i = 0; i < kNumIn; ++i) { a->p[i] = pa[i]; b->p[i] = pv[i]; }
+        a->p[kPlay] = b->p[kPlay] = 1; std::vector<float> La, Lb; run(*a, 3.0, &La); run(*b, 3.0, &Lb);
+        double d = 0, n2 = 0; for (size_t i = 0; i < La.size(); ++i) { d += (La[i] - Lb[i]) * (La[i] - Lb[i]); n2 += Lb[i] * Lb[i]; }
+        check(std::sqrt(d / n2) < 1e-4, "the own preset sounds exactly like the edited sound it was saved from");
+        check(ownRemove(idx) && ownAt(idx) != nullptr && ownCount() >= 0, "removing it takes it out of the library but keeps it working in this session");
+    }
+    // ---- 1.3: DRAG TO DAW renders in the background with progress and can be cancelled
+    {
+        SampleData longS; longS.rate = 44100; longS.L.resize(44100 * 60); longS.R.resize(44100 * 60);
+        for (size_t i = 0; i < longS.L.size(); ++i) longS.L[i] = longS.R[i] = src.L[i % src.L.size()];
+        float pv[kParamCount]; presetValues(18, pv);   // a long reverb
+        std::atomic<float> prog { 0 }; std::atomic<bool> cancel { false };
+        std::vector<float> L, R;
+        const auto t0 = std::chrono::steady_clock::now();
+        renderLumenOffline(pv, longS, 44100, 120, 1, L, R, nullptr, &prog, &cancel);
+        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        std::printf("      render of a 60 s sample: %.2f s\n", el);
+        check(prog.load() == 1.0f && L.size() > 60 * 44100 && el < 6.0, "DRAG TO DAW: a 60 s sample renders in a few seconds, with progress");
+        cancel.store(true); std::vector<float> L2, R2; renderLumenOffline(pv, longS, 44100, 120, 1, L2, R2, nullptr, &prog, &cancel);
+        check(L2.empty(), "a render can be cancelled (when you change the sound while it runs)");
     }
     // ---- nothing keeps sounding (or builds up) on its own after the sample ends
     {

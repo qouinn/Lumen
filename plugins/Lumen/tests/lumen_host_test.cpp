@@ -109,7 +109,7 @@ int main(int argc, char** argv)
     auto timerExt = (const clap_plugin_timer_support_t*)plug->get_extension(plug, CLAP_EXT_TIMER_SUPPORT);
     const uint32_t pc = params->count(plug);
     std::printf("      %u parameters\n", pc);
-    check(pc == 130, "parameter table exported (" + std::to_string(pc) + ")");
+    check(pc == 312, "parameter table exported (" + std::to_string(pc) + ")");
     auto findParam = [&](const char* name) -> clap_id { for (uint32_t i = 0; i < pc; ++i) { clap_param_info_t inf; params->get_info(plug, i, &inf); if (!std::strcmp(inf.name, name)) return inf.id; } return CLAP_INVALID_ID; };
     auto val = [&](const char* name) { double v = -999; params->get_value(plug, findParam(name), &v); return v; };
     const double sr = 48000; const uint32_t block = 256;
@@ -156,7 +156,7 @@ int main(int argc, char** argv)
         std::printf("      gui %ux%u\n", w, h);
         auto xdo = [&](std::string a) { if (std::system(("xdotool " + a + " >/dev/null 2>&1").c_str())) {} pump(8); };
         auto shot = [&](const char* n) { std::string c = std::string("import -window root -crop ") + std::to_string(w) + "x" + std::to_string(h) + "+0+0 " + argv[3] + "_" + n + ".png"; if (std::system(c.c_str())) {} };
-        xdo("mousemove 111 344 click 1");                       // category SHIMMER & SPACE
+        xdo("mousemove 111 333 click 1");                       // category SHIMMER & SPACE
         xdo("mousemove 340 336 click 1");                       // 3rd sound in it
         check(val("Macro Set") == 17, "click a sound in the browser loads it (" + std::to_string(val("Macro Set")) + ")");
         const double m1 = val("Macro 1");
@@ -165,7 +165,7 @@ int main(int argc, char** argv)
         xdo("mousemove 862 31 click 1"); check(val("Play") == 1, "PLAY button");
         { float pk = 0; for (int i = 0; i < 60; ++i) { auto s = run(block / sr, EvList()); pk = std::max(pk, s.peak); } check(pk > 0.02f, "PLAY makes sound"); }
         pump(20); shot("sounds");
-        xdo("mousemove 111 286 click 1");                       // ALL SOUNDS
+        xdo("mousemove 111 277 click 1");                       // ALL SOUNDS
         xdo("mousemove 470 450 click 5"); xdo("mousemove 470 450 click 5"); pump(4);   // scroll down the list
         shot("all");
         xdo("mousemove 293 31 click 1"); check(val("Original Sound") == 1, "ORIGINAL on"); pump(6); shot("original");
@@ -187,10 +187,10 @@ int main(int argc, char** argv)
         xdo("mousemove 550 330 click --repeat 2 --delay 80 1");
         check(val("Timeline Sections") == 2 && std::fabs(val("Section 2 Start") - 0.5) < 0.01 && val("Timeline On") == 1,
               "double-click in the middle adds section 2 there (" + std::to_string(val("Section 2 Start")) + ")");
-        xdo("mousemove 111 499 click 1");                                   // category SPACE
-        xdo("mousemove 138 533 click 1");                                   // its first sound
+        xdo("mousemove 171 496 click 1");                                   // category SPACE
+        xdo("mousemove 138 549 click 1");                                   // its first sound
         check(val("Section 2 Sound") == 15, "clicking a sound gives it to section 2 (" + std::to_string(val("Section 2 Sound")) + ")");
-        xdo("mousemove 346 533 click 1");                                   // play button on the 2nd sound
+        xdo("mousemove 348 549 click 1");                                   // play button on the 2nd sound
         check(val("Section 2 Sound") == 16 && val("Play") == 1 && std::fabs(val("Play From") - 0.5) < 0.01, "a sound's play button picks it and plays from the section start");
         { float pk = 0; for (int i = 0; i < 80; ++i) { auto s = run(block / sr, EvList()); pk = std::max(pk, s.peak); } check(pk > 0.02f, "the timeline makes sound"); }
         xdo("mousemove 850 330 click --repeat 2 --delay 80 1");
@@ -200,6 +200,26 @@ int main(int argc, char** argv)
         xdo("mousemove 786 426 click 1"); check(val("Timeline Curve") == 2, "CURVE: SHARP");
         xdo("mousemove 1013 426 click 1"); check(val("Timeline Tails") == 1, "TAILS CUT");
         pump(20); shot("timeline");
+        // ---- 1.3: EDIT with the timeline on edits the selected section; SAVE AS OWN PRESET
+        {
+            const double snd2 = val("Section 3 Sound");
+            xdo("mousemove 247 211 click 1");                                   // EDIT page (section 3 is selected)
+            xdo("mousemove 1052 559 click 1");                                  // REVERB power of section 3
+            pump(10); shot("edit_section");
+            Buf st; clap_ostream_t so{ &st, osWrite }; state->save(plug, &so);
+            const std::string sv(st.data.begin(), st.data.end());
+            check(sv.find("2:r_on=0") != std::string::npos && val("Section 3 Sound") == snd2,
+                  "EDIT with the timeline on changes section 3's own copy (saved with the project)");
+            if (std::system("rm -f \"$HOME/Documents/Lumen/Own Presets.txt\"")) {}
+            xdo("mousemove 1009 211 click 1");                                  // SAVE AS OWN PRESET
+            pump(6); shot("naming");
+            xdo("type --delay 60 'Test Sound'"); xdo("key Return"); pump(10);
+            std::string lib; { std::FILE* f = std::fopen((std::string(std::getenv("HOME")) + "/Documents/Lumen/Own Presets.txt").c_str(), "rb"); if (f) { char b[4096]; size_t n; while ((n = std::fread(b, 1, sizeof b, f)) > 0) lib.append(b, n); std::fclose(f); } }
+            check(lib.find("|Test Sound|") != std::string::npos && lib.find("r_on=0") != std::string::npos && val("Section 3 Sound") >= 300,
+                  "SAVE AS OWN PRESET: type a name, Enter -> saved to Documents/Lumen with the edit, and given to section 3 (" + std::to_string(val("Section 3 Sound")) + ")");
+            xdo("mousemove 403 211 click 1"); xdo("mousemove 851 520 click 1");   // TIMELINE page, OWN chip
+            pump(10); shot("own_picker");
+        }
         xdo("mousemove 90 211 click 1"); pump(6); shot("sounds_tl");     // SOUNDS page while the timeline is on
         xdo("mousemove 403 211 click 1");
         xdo("mousemove 850 330 click 3"); check(val("Timeline Sections") == 2, "right-click a line removes that section");
@@ -230,8 +250,48 @@ int main(int argc, char** argv)
         xdo("mousemove 862 31 click 1"); check(val("Play") == 0, "STOP after click-to-play");
         pump(30);
         if (std::system("rm -rf \"$HOME/Documents/Grainfield Renders\"")) {}
-        xdo("mousemove 951 31 click 1"); pump(4);
-        check(std::system("ls \"$HOME/Documents/Grainfield Renders\"/Lumen*.wav >/dev/null 2>&1") == 0, "drag tile click renders a Lumen WAV");
+        // the render runs in the background now: wait for the file
+        auto newestWav = [&]() -> std::string {
+            std::string out; FILE* p = popen("ls -t \"$HOME/Documents/Grainfield Renders\"/Lumen*.wav 2>/dev/null | head -1", "r");
+            if (p) { char b[1024]; if (fgets(b, sizeof b, p)) { out = b; while (!out.empty() && (out.back() == '\n' || out.back() == '\r')) out.pop_back(); } pclose(p); }
+            return out; };
+        auto wavRms = [](const std::string& path, double from, double to) -> double {   // 24-bit stereo WAV, seconds from..to
+            std::FILE* f = std::fopen(path.c_str(), "rb"); if (!f) return -1;
+            std::vector<unsigned char> d; unsigned char b[65536]; size_t n; while ((n = std::fread(b, 1, sizeof b, f)) > 0) d.insert(d.end(), b, b + n); std::fclose(f);
+            size_t pos = 12, data = 0, len = 0; unsigned rate = 44100;
+            while (pos + 8 <= d.size()) { const size_t sz = d[pos + 4] | d[pos + 5] << 8 | d[pos + 6] << 16 | (size_t)d[pos + 7] << 24;
+                if (!std::memcmp(&d[pos], "fmt ", 4)) rate = d[pos + 12] | d[pos + 13] << 8 | d[pos + 14] << 16 | d[pos + 15] << 24;
+                if (!std::memcmp(&d[pos], "data", 4)) { data = pos + 8; len = std::min(sz, d.size() - data); break; } pos += 8 + sz; }
+            double s = 0; size_t cnt = 0;
+            for (size_t fr = (size_t)(from * rate); fr < (size_t)(to * rate) && (fr + 1) * 6 <= len; ++fr) { const unsigned char* q = &d[data + fr * 6]; int v = q[0] | q[1] << 8 | q[2] << 16; if (v & 0x800000) v -= 0x1000000; s += (double)v * v; ++cnt; }
+            return cnt ? std::sqrt(s / cnt) / 8388608.0 : 0; };
+        auto renderNow = [&]() -> std::string {
+            if (std::system("rm -rf \"$HOME/Documents/Grainfield Renders\"")) {}
+            xdo("mousemove 951 31 click 1");
+            for (int i = 0; i < 300 && newestWav().empty(); ++i) pump(2);
+            pump(4); return newestWav(); };
+        const std::string r1 = renderNow();
+        check(!r1.empty(), "drag tile click renders a Lumen WAV (in the background)");
+        // what you hear is what you drag: an edit (REVERB off on the EDIT page) must be in the file
+        const double tail1 = wavRms(r1, 10.5, 12.5), body1 = wavRms(r1, 1, 8);
+        xdo("mousemove 247 211 click 1"); xdo("mousemove 1052 559 click 1"); xdo("mousemove 90 211 click 1");
+        const std::string r2 = renderNow();
+        const double tail2 = wavRms(r2, 10.5, 12.5), body2 = wavRms(r2, 1, 8);
+        std::printf("      render: body %.4f tail %.5f \xC2\xB7 after switching REVERB: body %.4f tail %.5f\n", body1, tail1, body2, tail2);
+        check(!r2.empty() && r2 != r1 && (std::fabs(body2 - body1) > 0.03 * body1 || std::fabs(tail2 - tail1) > 0.5 * std::max(tail1, tail2) + 1e-6), "the dragged WAV contains the edit you just made (REVERB switched on the EDIT page)");
+        xdo("mousemove 247 211 click 1"); xdo("mousemove 1052 559 click 1"); xdo("mousemove 90 211 click 1");
+        // ---- 1.3: many sections (add them with + ADD SOUND), then look at both pages
+        {
+            Buf st; clap_ostream_t so{ &st, osWrite }; state->save(plug, &so);
+            check(std::string(st.data.begin(), st.data.end()).find("|Test Sound|") != std::string::npos, "the project keeps a copy of the own preset it uses");
+            xdo("mousemove 403 211 click 1");
+            for (int i = 0; i < 40 && val("Timeline Sections") < 24; ++i) xdo("mousemove 92 426 click 1");
+            check(val("Timeline Sections") >= 24, "+ ADD SOUND keeps adding sections past 6 (" + std::to_string(val("Timeline Sections")) + ")");
+            { float pk = 0; xdo("mousemove 862 31 click 1"); for (int i = 0; i < 120; ++i) { auto s2 = run(block / sr, EvList()); pk = std::max(pk, s2.peak); } check(pk > 0.02f, "a timeline with 24 sections plays"); }
+            pump(20); shot("many_timeline");
+            xdo("mousemove 90 211 click 1"); pump(10); shot("many_sounds");
+            xdo("mousemove 862 31 click 1");
+        }
         guiExt->hide(plug); guiExt->destroy(plug); XDestroyWindow(dpy, win); XCloseDisplay(dpy);
     }
 #else
