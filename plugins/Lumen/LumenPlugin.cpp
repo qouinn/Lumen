@@ -5,6 +5,7 @@
 #include "extra/String.hpp"
 
 #include "LumenDSP.hpp"
+#include "LumenOwn.hpp"
 #include "AudioFile.hpp"
 
 #include <memory>
@@ -14,7 +15,7 @@ START_NAMESPACE_DISTRHO
 
 using namespace lm;
 
-enum States { kStateSample = 0, kStateCount };
+enum States { kStateSample = 0, kStateEdits, kStateOwn, kStateCount };
 
 class LumenPlugin : public Plugin
 {
@@ -24,7 +25,9 @@ public:
     {
         fBuiltin.reset(new SampleData());
         makeLumenSource(*fBuiltin, 44100.0);
+        ownLoadLibrary();
         fEngine.reset(new LumenEngine());
+        fEngine->setEditSource(&fEdits);
         float p[kParamCount]; presetValues(0, p);
         for (uint32_t i = 0; i < kNumIn; ++i) fEngine->p[i] = p[i];
         fEngine->setSampleRate(getSampleRate());
@@ -38,7 +41,7 @@ protected:
     const char* getMaker() const override { return DISTRHO_PLUGIN_BRAND; }
     const char* getHomePage() const override { return "https://grainfield.audio"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 2, 1); }
+    uint32_t getVersion() const override { return d_version(1, 3, 0); }
 
     void initAudioPort(bool input, uint32_t index, AudioPort& port) override
     {
@@ -89,8 +92,11 @@ protected:
 
     void initState(uint32_t index, State& st) override
     {
-        st.key = "sample"; st.label = "Sample"; st.hints = kStateIsFilenamePath; st.defaultValue = "";
-        (void)index;
+        switch (index) {
+        case kStateSample: st.key = "sample"; st.label = "Sample"; st.hints = kStateIsFilenamePath; st.defaultValue = ""; break;
+        case kStateEdits:  st.key = "sec_edits"; st.label = "Section edits"; st.hints = 0; st.defaultValue = ""; break;
+        default:           st.key = "own"; st.label = "Own presets used"; st.hints = kStateIsOnlyForDSP; st.defaultValue = ""; break;
+        }
     }
 
     float getParameterValue(uint32_t i) const override
@@ -113,10 +119,24 @@ protected:
         for (uint32_t i = 0; i < kNumIn; ++i) if (!presetKeeps(i)) fEngine->p[i] = pr[i];
     }
 
-    String getState(const char* key) const override { return !std::strcmp(key, "sample") ? fPath : String(); }
+    String getState(const char* key) const override
+    {
+        if (!std::strcmp(key, "sample")) return fPath;
+        if (!std::strcmp(key, "sec_edits")) return fEditsText;
+        if (!std::strcmp(key, "own")) return String(ownProjectText(fEngine->p).c_str());   // copies travel with the project
+        return String();
+    }
 
     void setState(const char* key, const char* value) override
     {
+        if (!std::strcmp(key, "sec_edits")) {
+            fEditsText = value ? value : "";
+            float ov[kMaxSections][kNumEdit];
+            editsFromText(value, ov, kMaxSections);
+            fEdits.write(ov);
+            return;
+        }
+        if (!std::strcmp(key, "own")) { ownFromProject(value); fEngine->refreshSounds(); return; }
         if (std::strcmp(key, "sample")) return;
         std::unique_ptr<SampleData> ns;
         if (value && *value) {
@@ -163,7 +183,8 @@ private:
     std::unique_ptr<SampleData> fBuiltin, fSample;
     std::vector<gf::MidiMsg> fMidi;
     Mutex fMutex;
-    String fPath;
+    String fPath, fEditsText;
+    EditBox fEdits;
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LumenPlugin)
 };

@@ -3,6 +3,7 @@
 #include "DistrhoUI.hpp"
 
 #include "LumenDSP.hpp"
+#include "LumenOwn.hpp"
 #include "AudioFile.hpp"
 #include "Export.hpp"
 #include "res/Fonts.hpp"
@@ -12,8 +13,10 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <atomic>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 START_NAMESPACE_DISTRHO
@@ -83,13 +86,17 @@ constexpr Rect rTails      { 836, 414, 236, 24 };
 constexpr Rect rPickCard   { 16, 456, 700, 232 };
 constexpr Rect rFrom       { 486, 462, 218, 20 };
 constexpr Rect rSecCard    { 726, 456, 358, 232 };
-inline Rect chipT(int i) { return { 28 + i * 56.5f, 488, 53, 22 }; }
+inline Rect chipT(int i) { return { 28 + (i % 7) * 97.0f, 486 + (i / 7) * 24.0f, 93, 21 }; }   // 2 rows of 7 categories
 constexpr int kTiles = 20;   // 4 x 5 sounds per category in the timeline picker
-inline Rect tileT(int i) { const float w = (676.0f - 18) / 4.0f; return { 28 + (i % 4) * (w + 6), 518 + (i / 4) * 33.0f, w, 30 }; }
-inline constexpr const char* kCatShort[] = { "GRAIN", "SPACE", "PADS", "RHYTHM", "LO-FI", "PITCH", "FILTER", "DRIVE", "BREAK", "DREAM", "CINEMA", "SCI-FI" };
+inline Rect tileT(int i) { const float w = (676.0f - 18) / 4.0f; return { 28 + (i % 4) * (w + 6), 536 + (i / 4) * 29.5f, w, 26 }; }
+inline constexpr const char* kCatShort[] = { "GRAIN", "SPACE", "PADS", "RHYTHM", "LO-FI", "PITCH", "FILTER", "DRIVE", "BREAK", "DREAM", "CINEMA", "SCI-FI", "TRANSFORM", "OWN" };
+constexpr int kUiCats = kNumCats + 1;   // the built-in categories + OWN PRESETS
+inline const char* catName(int c) { return c == kOwnCat ? "OWN PRESETS" : kCatNames[c < 0 ? 0 : (c >= kNumCats ? kNumCats - 1 : c)]; }
+constexpr Rect rSaveOwn   { 934, 198, 150, 26 };   // SAVE AS OWN PRESET (tabs row, shown when the sound was edited)
+constexpr Rect rNameBox   { 726, 230, 358, 96 };   // name entry for a new own preset
 enum Page { kPageSounds = 0, kPageEdit, kPageTimeline };
 
-inline Rect catRow(int i) { return { rCats.x + 8, rCats.y + 33 + i * 32.4f, rCats.w - 16, 29 }; }   // i = 0 ALL, 1..12 categories
+inline Rect catRow(int i) { return { rCats.x + 8, rCats.y + 32 + i * 28.0f, rCats.w - 16, 25 }; }   // i = 0 ALL, 1..13 categories, 14 OWN
 inline Rect chip(int m) { const float w = (rChain.w - 16 - 8 * 6) / 9.0f; return { rChain.x + 8 + m * (w + 6), rChain.y + 8, w, rChain.h - 16 }; }
 inline Rect modCard(int m) { const float w = (1068.0f - 2 * 9) / 3.0f, h = (456.0f - 2 * 9) / 3.0f; return { 16 + (m % 3) * (w + 9), 232 + (m / 3) * (h + 9), w, h }; }
 inline Rect macroKnob(int m) { return { m % 2 == 0 ? 815.0f : 995.0f, m < 2 ? 372.0f : 506.0f, 34, 0 }; }
@@ -128,10 +135,14 @@ public:
         if (sf > 0.0 && std::fabs(sf - 1.0) > 0.01) setSize((uint)std::lround(W * sf), (uint)std::lround(H * sf));
         setGeometryConstraints((uint)(W * 0.55f), (uint)(H * 0.55f), true, false);
         updateScale(getWidth(), getHeight());
-        fSample.reset(new SampleData()); makeLumenSource(*fSample, 44100.0); fName = "Built-in \xC2\xB7 piano & beat"; fBuiltin = true;
+        fSample = std::make_shared<SampleData>(); makeLumenSource(*fSample, 44100.0); fName = "Built-in \xC2\xB7 piano & beat"; fBuiltin = true;
+        for (auto& row : fSecOv) for (float& v : row) v = kNoEdit;
+        ownLoadLibrary();
         computePeaks();
         buildKnobs();
     }
+
+    ~LumenUI() override { if (fJob) { fJob->cancel.store(true); if (fJob->th.joinable()) fJob->th.join(); } }
 
 protected:
     // =========================================================================================
@@ -152,10 +163,11 @@ protected:
 
     void stateChanged(const char* key, const char* value) override
     {
+        if (!std::strcmp(key, "sec_edits")) { editsFromText(value, fSecOv, kMaxSections); repaint(); return; }
         if (std::strcmp(key, "sample")) return;
-        if (!value || !*value) { fSample.reset(new SampleData()); makeLumenSource(*fSample, 44100.0); fName = "Built-in \xC2\xB7 piano & beat"; fBuiltin = true; }
+        if (!value || !*value) { fSample = std::make_shared<SampleData>(); makeLumenSource(*fSample, 44100.0); fName = "Built-in \xC2\xB7 piano & beat"; fBuiltin = true; }
         else {
-            std::unique_ptr<SampleData> ns(new SampleData());
+            std::shared_ptr<SampleData> ns = std::make_shared<SampleData>();
             if (gf::loadAudioFile(value, *ns)) { fSample.swap(ns); fName = gf::fileNameOf(value); fBuiltin = false; }
             else toast("Could not load " + gf::fileNameOf(value));
         }
@@ -170,6 +182,7 @@ protected:
         const float dt = (float)std::min(0.1, now - fLastIdle);
         fLastIdle = now;
         fPulse += dt;
+        pollRender();
         if (fStopHold > 0) { fStopHold -= dt; if (fStopHold <= 0) repaint(); }
         if (fToastTime > 0) fToastTime = std::max(0, fToastTime - (int)std::lround(dt * 30));
         // a one-shot that finished: pop the Play button back out
@@ -243,9 +256,17 @@ protected:
         static const char* hints[3] = { "pick a category, click a sound, shape it with the four big knobs",
                                         "every module of the current sound \xC2\xB7 knobs with a colored dot are controlled by that macro",
                                         "fade from one sound to the next while the sample plays" };
-        txt(rTabTl.x + rTabTl.w + 14, rTabSounds.cy() + 0.5f, hints[fPage], cDim, 9, ALIGN_LEFT | ALIGN_MIDDLE, fFontMed, 0.3f);
+        const bool canSave = canSaveOwn() && fV[kOriginal] < 0.5f;
+        save(); scissor(rTabTl.x + rTabTl.w + 6, rTabSounds.y, (canSave ? rSaveOwn.x - 10 : W - 16) - (rTabTl.x + rTabTl.w + 6), rTabSounds.h);
+        if (fPage == kPageEdit && tlActive()) {
+            char b[128]; std::snprintf(b, sizeof b, "EDITING SECTION %d \xC2\xB7 %s \xC2\xB7 changes apply to this section only", fSel + 1, presetAt(secSound(fSel)).name);
+            txt(rTabTl.x + rTabTl.w + 14, rTabSounds.cy() + 0.5f, b, secCol(fSel), 9, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 0.5f);
+        } else txt(rTabTl.x + rTabTl.w + 14, rTabSounds.cy() + 0.5f, hints[fPage], cDim, 9, ALIGN_LEFT | ALIGN_MIDDLE, fFontMed, 0.3f);
+        restore();
+        if (canSave) pill(rSaveOwn, "SAVE AS OWN PRESET", true, 8.5f);
         if (fPage == kPageEdit) drawEdit(); else if (fPage == kPageTimeline) drawTimeline(); else drawBrowser();
         drawChain();
+        if (fNaming) drawNameBox();
         if (fV[kOriginal] > 0.5f) {
             beginPath(); rect(16, 232, 1068, 516); fillColor(12, 8, 16, 180); fill();
             txt(W * 0.5f, 450, "ORIGINAL SOUND IS ON", cPeach, 15, ALIGN_CENTER | ALIGN_MIDDLE, fFontBold, 2.2f);
@@ -267,7 +288,7 @@ protected:
     {
         drawLogo(32, 31);
         txt(58, 29, "LUMEN", cText, 19, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 4.0f);
-        txt(59, 48, "SAMPLE FX INSTRUMENT  \xC2\xB7  1.2.1", cDim, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 1.6f);
+        txt(59, 48, "SAMPLE FX INSTRUMENT  \xC2\xB7  1.3", cDim, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 1.6f);
         {
             const bool on = fV[kOriginal] > 0.5f;
             beginPath(); roundedRect(rOrig.x, rOrig.y, rOrig.w, rOrig.h, 11);
@@ -280,7 +301,7 @@ protected:
         beginPath(); roundedRect(rPresetBox.x, rPresetBox.y, rPresetBox.w, rPresetBox.h, 10); fillC(cWell); fill(); strokeColor(255, 255, 255, 18); strokeWidth(1); stroke();
         const Preset& pr = presetAt(tlActive() ? secSound(fSel) : cur());
         if (tlActive()) { char b[32]; std::snprintf(b, sizeof b, "TIMELINE \xC2\xB7 SECTION %d", fSel + 1); txt(rPresetBox.x + 12, rPresetBox.cy() + 0.5f, b, secCol(fSel), 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 1.2f); }
-        else txt(rPresetBox.x + 12, rPresetBox.cy() + 0.5f, kCatNames[pr.cat], cRose, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 1.2f);
+        else txt(rPresetBox.x + 12, rPresetBox.cy() + 0.5f, catName(pr.cat), cRose, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 1.2f);
         txt(rPresetBox.x + rPresetBox.w - 12, rPresetBox.cy() + 0.5f, pr.name, cText, 12, ALIGN_RIGHT | ALIGN_MIDDLE, fFontSemi, 0.4f);
         pill(rSurprise, "SURPRISE", false, 9.5f);
         // play
@@ -298,8 +319,14 @@ protected:
         strokeColor(255, 150, 160, fDragPressed ? 200 : 70); strokeWidth(1.2f); stroke();
         for (int i = 0; i < 9; ++i) { const float hgt = 4 + 10 * std::fabs(std::sin(i * 1.7f + 0.6f)); beginPath(); roundedRect(rDrag.x + 10 + i * 3.2f, rDrag.cy() - hgt * 0.5f, 2, hgt, 1); fillC(cRose, 200); fill(); }
         txt(rDrag.x + 44, rDrag.y + 14, gf::canDragFiles() ? "DRAG TO DAW" : "EXPORT WAV", cText, 9.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 1.0f);
-        char info[40]; std::snprintf(info, sizeof info, "%d\xC3\x97 sample + tail \xC2\xB7 wav", fPasses);
-        txt(rDrag.x + 44, rDrag.y + 27, info, cDim, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontMed, 0.3f);
+        if (rendering()) {   // the render runs in the background: show how far it is
+            const float pr = clampf(fJob->progress.load(), 0, 1);
+            beginPath(); roundedRect(rDrag.x + 44, rDrag.y + 24, rDrag.w - 54, 5, 2.5f); fillC(cWell); fill();
+            beginPath(); roundedRect(rDrag.x + 44, rDrag.y + 24, std::max(5.0f, (rDrag.w - 54) * pr), 5, 2.5f); accent(rDrag.x + 44, 0, rDrag.x + rDrag.w, 0); fill();
+        } else {
+            char info[40]; std::snprintf(info, sizeof info, renderReady() ? "%d\xC3\x97 \xC2\xB7 ready to drag" : "%d\xC3\x97 sample + tail \xC2\xB7 wav", fPasses);
+            txt(rDrag.x + 44, rDrag.y + 27, info, renderReady() ? cPeach : cDim, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontMed, 0.3f);
+        }
         pill(rLoad, "LOAD", true, 10.5f);
     }
 
@@ -355,8 +382,19 @@ protected:
     }
 
     // ---- SOUNDS page
-    int catCount(int c) const { int n = 0; for (int i = 0; i < kNumPresets; ++i) if (c < 0 || kPresets[i].cat == c) ++n; return n; }
-    int listIndex(int k) const { int n = 0; for (int i = 0; i < kNumPresets; ++i) if (fCat < 0 || kPresets[i].cat == fCat) { if (n == k) return i; ++n; } return -1; }
+    // sounds: the built-in ones (0..kNumPresets-1), then your own (kOwnBase..)
+    int catCount(int c) const {
+        if (c == kOwnCat) return ownCount();
+        int n = 0; for (int i = 0; i < kNumPresets; ++i) if (c < 0 || kPresets[i].cat == c) ++n;
+        return c < 0 ? n + ownCount() : n;
+    }
+    int catNth(int c, int k) const {
+        if (k < 0) return -1;
+        if (c == kOwnCat) return ownNth(k);
+        int n = 0; for (int i = 0; i < kNumPresets; ++i) if (c < 0 || kPresets[i].cat == c) { if (n == k) return i; ++n; }
+        return c < 0 ? ownNth(k - n) : -1;
+    }
+    int listIndex(int k) const { return catNth(fCat, k); }
     Rect tile(int k) const {   // k-th visible preset tile (after scroll)
         const float w = (rList.w - 24 - 8) / 2.0f;
         const int row = k / 2, col = k % 2;
@@ -365,7 +403,7 @@ protected:
     void drawBrowser()
     {
         card(rCats); title(rCats.x + 14, rCats.y + 17, "CATEGORIES");
-        for (int i = 0; i <= kNumCats; ++i) {
+        for (int i = 0; i <= kUiCats; ++i) {
             const Rect rr = catRow(i);
             const int c = i - 1;
             const bool sel = fCat == c;
@@ -373,13 +411,13 @@ protected:
             beginPath(); roundedRect(rr.x, rr.y, rr.w, rr.h, 9);
             if (sel) { accent(rr.x, rr.y, rr.x + rr.w, rr.y + rr.h, 0.95f); fill(); }
             else if (fHoverCat == i) { fillColor(255, 255, 255, 12); fill(); }
-            txt(rr.x + 12, rr.cy() + 0.5f, c < 0 ? "ALL SOUNDS" : kCatNames[c], sel ? cInk : cText, 9, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 0.9f);
+            txt(rr.x + 12, rr.cy() + 0.5f, c < 0 ? "ALL SOUNDS" : catName(c), sel ? cInk : (c == kOwnCat ? cPeach : cText), 9, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 0.9f);
             char b[8]; std::snprintf(b, sizeof b, "%d", catCount(c));
             txt(rr.x + rr.w - 12, rr.cy() + 0.5f, b, sel ? cInk : cDim, 8.5f, ALIGN_RIGHT | ALIGN_MIDDLE, fFontSemi, 0.3f);
             if (hasCur && !sel) { beginPath(); circle(rr.x + rr.w - 30, rr.cy(), 3); fillC(cRose); fill(); }
         }
         card(rList);
-        char t[64]; std::snprintf(t, sizeof t, "%s  \xC2\xB7  %d SOUNDS", fCat < 0 ? "ALL SOUNDS" : kCatNames[fCat], catCount(fCat));
+        char t[64]; std::snprintf(t, sizeof t, "%s  \xC2\xB7  %d SOUND%s", fCat < 0 ? "ALL SOUNDS" : catName(fCat), catCount(fCat), catCount(fCat) == 1 ? "" : "S");
         title(rList.x + 14, rList.y + 17, t);
         if (catCount(fCat) > 18) txt(rList.x + rList.w - 14, rList.y + 17, "scroll for more", cDim, 8, ALIGN_RIGHT | ALIGN_MIDDLE, fFontMed, 0.3f);
         save(); scissor(rList.x + 4, rList.y + 32, rList.w - 8, rList.h - 38);
@@ -392,9 +430,12 @@ protected:
             beginPath(); roundedRect(tr.x, tr.y, tr.w, tr.h, 10);
             if (sel) { accent(tr.x, tr.y, tr.x + tr.w, tr.y + tr.h); fill(); }
             else { fillColor(255, 255, 255, hov ? 22 : 9); fill(); strokeColor(255, 255, 255, hov ? 40 : 14); strokeWidth(1); stroke(); }
-            txt(tr.x + 12, tr.y + 15, kPresets[idx].name, sel ? cInk : cText, 10.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 0.3f);
-            txt(tr.x + 12, tr.y + 29, fCat < 0 ? kCatNames[kPresets[idx].cat] : moduleSummary(idx).c_str(), sel ? Col{ 90, 40, 60 } : cDim, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontMed, 0.6f);
+            txt(tr.x + 12, tr.y + 15, presetAt(idx).name, sel ? cInk : cText, 10.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 0.3f);
+            txt(tr.x + 12, tr.y + 29, fCat < 0 ? catName(presetAt(idx).cat) : moduleSummary(idx).c_str(), sel ? Col{ 90, 40, 60 } : cDim, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontMed, 0.6f);
         }
+        if (n == 0 && fCat == kOwnCat)
+            wrapText(rList.x + 24, rList.y + 60, rList.w - 48, "No own presets yet. Change a sound (its knobs, or anything on the EDIT page), then click SAVE AS OWN PRESET at the top right. "
+                     "Your own presets are kept in Documents/Lumen and work in every project. Right-click one twice to remove it.", cSub, 10.5f, fFontMed, 15);
         restore();
         // macro panel
         card(rMacros);
@@ -402,15 +443,18 @@ protected:
             // the timeline decides the sound: clicking a sound here gives it to the selected section
             const Col sc = secCol(fSel);
             txt(rMacros.x + 16, rMacros.y + 22, "TIMELINE IS ON", sc, 13, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 1.6f);
-            char b[96]; std::snprintf(b, sizeof b, "Sounds you click here go to section %d (%s).", fSel + 1, kPresets[secSound(fSel)].name);
+            char b[96]; std::snprintf(b, sizeof b, "Sounds you click here go to section %d (%s).", fSel + 1, presetAt(secSound(fSel)).name);
             wrapText(rMacros.x + 16, rMacros.y + 40, rMacros.w - 32, b, cText, 10, fFontMed, 14);
             wrapText(rMacros.x + 16, rMacros.y + 76, rMacros.w - 32, "Each section's four knobs, its fades and its play buttons are on the TIMELINE page.", cSub, 10, fFontMed, 14);
             const int n = secCount();
             for (int s = 0; s < n; ++s) {
-                const Rect rr { rMacros.x + 16, rMacros.y + 124 + s * 34.0f, rMacros.w - 32, 28 };
-                beginPath(); roundedRect(rr.x, rr.y, rr.w, rr.h, 8); fillColor(kSecCol[s][0], kSecCol[s][1], kSecCol[s][2], s == fSel ? 220 : 40); fill();
-                char t[80]; std::snprintf(t, sizeof t, "%d   %s", s + 1, kPresets[secSound(s)].name);
-                txt(rr.x + 12, rr.cy() + 0.5f, t, s == fSel ? cInk : cText, 10, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 0.3f);
+                const Rect rr = secRow(s, n);
+                const Col c = secCol(s);
+                beginPath(); roundedRect(rr.x, rr.y, rr.w, rr.h, std::min(8.0f, rr.h * 0.4f)); fillColor(c.r, c.g, c.b, s == fSel ? 220 : 40); fill();
+                char t[80]; std::snprintf(t, sizeof t, "%d   %s%s", s + 1, presetAt(secSound(s)).name, secEdited(s) ? " *" : "");
+                save(); scissor(rr.x, rr.y, rr.w - 4, rr.h);
+                txt(rr.x + 10, rr.cy() + 0.5f, t, s == fSel ? cInk : cText, n > 8 ? 8.5f : 10, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 0.3f);
+                restore();
             }
             pill(rEditBtn, "OPEN THE TIMELINE  \xE2\x80\xBA", true, 8.5f);
             slider(rDryWet, kDryWet, "DRY / WET");
@@ -419,16 +463,23 @@ protected:
         }
         const Preset& pr = presetAt(cur());
         txt(rMacros.x + 16, rMacros.y + 22, pr.name, cText, 16, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 0.4f);
-        txt(rMacros.x + 16, rMacros.y + 40, kCatNames[pr.cat], cRose, 8, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 1.4f);
+        txt(rMacros.x + 16, rMacros.y + 40, catName(pr.cat), cRose, 8, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 1.4f);
         wrapText(rMacros.x + 16, rMacros.y + 54, rMacros.w - 32, pr.desc, cSub, 10, fFontMed, 14);
         for (size_t i = 0; i < fKnobs.size(); ++i) if (fKnobs[i].macro >= 0 && fKnobs[i].macro < 10) drawKnob((int)i);
         slider(rDryWet, kDryWet, "DRY / WET");
         slider(rOutSl, kOut, "OUTPUT");
         pill(rEditBtn, "EDIT THIS SOUND  \xE2\x80\xBA", false, 8.5f);
     }
+    // the section list on the SOUNDS page: one column for up to 8 sections, two narrower columns beyond that
+    Rect secRow(int s, int n) const {
+        const float top = rMacros.y + 120, avail = rDryWet.y - 10 - top;
+        if (n <= 8) return { rMacros.x + 16, top + s * 34.0f, rMacros.w - 32, 28 };
+        const int rows = (n + 1) / 2; const float step = std::min(34.0f, avail / rows), w = (rMacros.w - 32 - 6) * 0.5f;
+        return { rMacros.x + 16 + (s / rows) * (w + 6), top + (s % rows) * step, w, step - 3 };
+    }
     std::string moduleSummary(int idx) const {
-        const Preset& pr = kPresets[idx]; std::string s;
-        for (int m = 0; m < 9; ++m) for (int k = 0; k < pr.nVals; ++k) if (pr.vals[k].param == kModules[m].on && pr.vals[k].v > 0.5f) { if (!s.empty()) s += " \xC2\xB7 "; s += kModules[m].name; }
+        float pv[kParamCount]; presetValues(idx, pv); std::string s;
+        for (int m = 0; m < 9; ++m) if (pv[kModules[m].on] > 0.5f) { if (!s.empty()) s += " \xC2\xB7 "; s += kModules[m].name; }
         return s;
     }
     void slider(const Rect& r, uint32_t param, const char* label)
@@ -445,10 +496,11 @@ protected:
     // ---- EDIT page
     void drawEdit()
     {
-        float q[kParamCount]; applyMacros(fV, q);
+        float e[kParamCount]; editVals(e);   // the single sound, or the selected section when the timeline is on
+        float q[kParamCount]; applyMacros(e, q);
         for (int m = 0; m < 9; ++m) {
             const Rect c = modCard(m);
-            const bool on = fV[kModules[m].on] > 0.5f;
+            const bool on = e[kModules[m].on] > 0.5f;
             card(c);
             if (on) { beginPath(); roundedRect(c.x + 0.5f, c.y + 0.5f, c.w - 1, c.h - 1, 14); strokeColor(255, 140, 150, 80); strokeWidth(1.2f); stroke(); }
             char t[16]; std::snprintf(t, sizeof t, "%d  %s", m + 1, kModules[m].name);
@@ -460,17 +512,15 @@ protected:
             const ModLayout& L = kLayouts[m];
             if (L.toggle >= 0) {
                 const Rect tr = toggleRect(m);
-                pill(tr, L.toggleLabel, fV[L.toggle] > 0.5f, 7.5f);
+                pill(tr, L.toggleLabel, e[L.toggle] > 0.5f, 7.5f);
             }
-            if (L.seg >= 0) segmented(segRect(m), L.segNames, L.segN, (int)fV[L.seg], L.segN > 5 ? 7.0f : 8.0f);
+            if (L.seg >= 0) segmented(segRect(m), L.segNames, L.segN, (int)e[L.seg], L.segN > 5 ? 7.0f : 8.0f);
             if (!on) { beginPath(); roundedRect(c.x, c.y + 28, c.w, c.h - 28, 12); fillColor(20, 14, 26, 150); fill(); }
         }
-        for (size_t i = 0; i < fKnobs.size(); ++i) if (fKnobs[i].macro < 0) drawKnob((int)i, q);
-        if (tlActive()) {
-            beginPath(); rect(16, 232, 1068, 456); fillColor(12, 8, 16, 190); fill();
-            txt(W * 0.5f, 440, "THE TIMELINE IS ON", cPeach, 14, ALIGN_CENTER | ALIGN_MIDDLE, fFontBold, 2.0f);
-            txt(W * 0.5f, 464, "each section plays its own sound \xC2\xB7 EDIT changes the single sound, so switch the timeline off (TIMELINE page, ON button) to edit here",
-                cText, 10, ALIGN_CENTER | ALIGN_MIDDLE, fFontMed, 0.3f);
+        for (size_t i = 0; i < fKnobs.size(); ++i) if (fKnobs[i].macro < 0) drawKnob((int)i, q, e);
+        if (tlActive()) {   // a thin frame in the section's color: you are editing that section
+            const Col c = secCol(fSel);
+            beginPath(); roundedRect(12, 228, 1076, 464, 16); strokeColor(c.r, c.g, c.b, 150); strokeWidth(2); stroke();
         }
     }
     Rect powerRect(int m) const { const Rect c = modCard(m); return { c.x + c.w - 52, c.y + 8, 40, 18 }; }
@@ -483,7 +533,7 @@ protected:
         card(rChain);
         // with the timeline on, show the modules of the section that is playing (or selected)
         float pv[kParamCount]; const float* src = fV;
-        if (tlActive()) { const int s = fV[kOutPlaying] > 0.5f ? (int)fV[kOutSection] : fSel; presetValues(secSound(s), pv); src = pv; }
+        if (tlActive()) { const int s = fV[kOutPlaying] > 0.5f && fPage != kPageEdit ? (int)fV[kOutSection] : fSel; sectionValues(secSound(s), fSecOv[std::max(0, std::min(kMaxSections - 1, s))], pv); src = pv; }
         for (int m = 0; m < 9; ++m) {
             const Rect r = chip(m);
             const bool on = src[kModules[m].on] > 0.5f;
@@ -541,12 +591,13 @@ protected:
         default: std::snprintf(b, n, "%.0f %%", v * 100); return;
         }
     }
-    void drawKnob(int i, const float* q = nullptr)
+    void drawKnob(int i, const float* q = nullptr, const float* src = nullptr)
     {
         const Knob& k = fKnobs[(size_t)i];
         const bool isMacro = k.macro >= 0;
-        const int drivenBy = isMacro ? -1 : macroFor(fV, k.param);
-        const float v = (q && drivenBy >= 0) ? q[k.param] : fV[k.param];
+        const float* S = (src && !isMacro) ? src : fV;
+        const int drivenBy = isMacro ? -1 : macroFor(S, k.param);
+        const float v = (q && drivenBy >= 0) ? q[k.param] : S[k.param];
         const float nrm = clampf(toNorm(k.param, v), 0, 1);
         const ParamInfo in = getParamInfo(k.param);
         const bool bip = in.min < 0 && in.max > 0;
@@ -587,18 +638,31 @@ protected:
     {
         float x, y; toDesign(ev.pos.getX(), ev.pos.getY(), x, y);
         if (!ev.press) {
-            if (fDragKnob >= 0) { editParameter(fKnobs[(size_t)fDragKnob].param, false); fDragKnob = -1; }
+            if (fDragKnob >= 0) { if (fDragHost) editParameter(fKnobs[(size_t)fDragKnob].param, false); fDragKnob = -1; }
             if (fDragSlider >= 0) { editParameter((uint32_t)fDragSlider, false); fDragSlider = -1; }
             if (fDragRegion >= 0) { editParameter(fDragRegion == 0 ? kRegStart : kRegEnd, false); fDragRegion = -1; }
             if (fDragCut >= 0) { editParameter(slotParam(fDragCut, kSfStart), false); fDragCut = -1; }
             if (fDragFade >= 0) { editParameter(slotParam(fDragFade, kSfFade), false); fDragFade = -1; }
             if (fDragFadeAll) fDragFadeAll = false;
-            if (fDragPressed) { fDragPressed = false; if (!fDragStarted && !fRenderPath.empty()) { gf::revealFile(fRenderPath); toast("Saved: " + gf::fileNameOf(fRenderPath.c_str())); } fDragStarted = false; }
+            if (fDragPressed) {   // a plain click: save it and show the file (now, or as soon as the render is done)
+                fDragPressed = false;
+                if (!fDragStarted) { if (renderReady()) revealRender(); else fRevealWhenDone = true; }
+                fDragStarted = false; fWantDrag = false;
+            }
             repaint(); return true;
         }
         const bool right = ev.button == kMouseButtonRight;
         const bool dbl = (ev.time - fLastClick < 320) && std::fabs(x - fLastX) < 4 && std::fabs(y - fLastY) < 4;
         fLastClick = ev.time; fLastX = x; fLastY = y;
+
+        // naming a new own preset: the box takes the clicks
+        if (fNaming) {
+            if (nameSave().contains(x, y)) finishNaming(true);
+            else if (nameCancel().contains(x, y) || !rNameBox.contains(x, y)) finishNaming(false);
+            else { fNameFresh = false; repaint(); }   // a click in the field: keep the text and type on
+            return true;
+        }
+        if (rSaveOwn.contains(x, y) && canSaveOwn() && fV[kOriginal] < 0.5f) { startNaming(); return true; }
 
         // header
         if (rOrig.contains(x, y)) { setParam(kOriginal, fV[kOriginal] > 0.5f ? 0.0f : 1.0f, true); toast(fV[kOriginal] > 0.5f ? "ORIGINAL: your sample, untouched" : "Effect is back"); return true; }
@@ -607,11 +671,11 @@ protected:
         if (rSurprise.contains(x, y)) {
             const int now = tlActive() ? secSound(fSel) : cur();
             int i; do { i = (int)(std::rand() % kNumPresets); } while (i == now && kNumPresets > 1);
-            if (tlActive()) { assignSound(fSel, i); fTlCat = kPresets[i].cat; } else { loadPreset(i); fCat = kPresets[i].cat; fScrollRows = 0; }
+            if (tlActive()) { assignSound(fSel, i); fTlCat = presetAt(i).cat; } else { loadPreset(i); fCat = presetAt(i).cat; fScrollRows = 0; }
             return true;
         }
         if (Rect{ rPlay.x - 4, rPlay.y - 4, rPlay.w + 8, rPlay.h + 8 }.contains(x, y)) { if (soundingNow()) hardStop(); else { setParam(kPlayFrom, 0.0f, true); setParam(kPlay, 1.0f, true); } return true; }
-        if (rDrag.contains(x, y)) { fDragPressed = true; fDragStarted = false; fPressX = x; fPressY = y; renderToFile(); repaint(); return true; }
+        if (rDrag.contains(x, y)) { fDragPressed = true; fDragStarted = false; fWantDrag = false; fPressX = x; fPressY = y; startRender(); repaint(); return true; }
         if (rLoad.contains(x, y)) { requestStateFile("sample"); return true; }
         // wave strip
         {   // the start / end triangles sit partly under the LEN / LOOP / KEYS buttons: they win there
@@ -648,36 +712,41 @@ protected:
         if (rTabEdit.contains(x, y)) { fPage = kPageEdit; repaint(); return true; }
         if (rTabTl.contains(x, y)) { openTimeline(); return true; }
         // chain chips toggle modules
-        for (int m = 0; m < 9; ++m) if (chip(m).contains(x, y)) {
-            if (tlActive()) { toast("The timeline is on: each section uses its own sound \xC2\xB7 switch it off to change modules"); return true; }
-            toggleModule(m); return true;
-        }
+        for (int m = 0; m < 9; ++m) if (chip(m).contains(x, y)) { toggleModule(m); return true; }
         if (fV[kOriginal] > 0.5f && Rect{ 16, 232, 1068, 456 }.contains(x, y)) return true;
         if (fPage == kPageTimeline && pressTimeline(x, y, right, dbl)) return true;
-        if (fPage == kPageEdit && tlActive() && Rect{ 16, 232, 1068, 456 }.contains(x, y)) return true;
         // knobs
         const int k = knobAt(x, y);
         if (k >= 0) {
             const Knob& kn = fKnobs[(size_t)k];
+            float e[kParamCount]; editVals(e);
             if (kn.macro < 0) {
-                const int mb = macroFor(fV, kn.param);
-                if (mb >= 0) { char b[96]; std::snprintf(b, sizeof b, "This knob follows the %s macro \xC2\xB7 turn that one on the SOUNDS page", presetAt(cur()).m[mb].label); toast(b); return true; }
+                const int mb = macroFor(e, kn.param);
+                if (mb >= 0) {
+                    char b[128];
+                    std::snprintf(b, sizeof b, "This knob follows the %s macro \xC2\xB7 turn that one on the %s page", presetAt((int)e[kMacroSet]).m[mb].label, tlActive() ? "TIMELINE" : "SOUNDS");
+                    toast(b); return true;
+                }
             }
             if (dbl || right) {
                 if (kn.macro >= 10) { setParam(kn.param, presetAt(secSound(fSel)).mdef[kn.macro - 10], true); return true; }
+                if (kn.macro < 0) { resetEv(kn.param); return true; }
                 float pv[kParamCount]; presetValues(cur(), pv);
                 setParam(kn.param, pv[kn.param], true); return true;
             }
-            fDragKnob = k; fDragY = y; fDragStartNorm = toNorm(kn.param, fV[kn.param]);
-            editParameter(kn.param, true);
+            fDragKnob = k; fDragY = y; fDragStartNorm = toNorm(kn.param, kn.macro < 0 ? e[kn.param] : fV[kn.param]);
+            fDragHost = kn.macro >= 0 || !tlActive();
+            if (fDragHost) editParameter(kn.param, true);
             return true;
         }
         if (fPage == kPageSounds) {
-            for (int i = 0; i <= kNumCats; ++i) if (catRow(i).contains(x, y)) { fCat = i - 1; fScrollRows = 0; repaint(); return true; }
+            for (int i = 0; i <= kUiCats; ++i) if (catRow(i).contains(x, y)) { fCat = i - 1; fScrollRows = 0; repaint(); return true; }
             if (rList.contains(x, y) && y > rList.y + 32) {
                 const int n = catCount(fCat);
                 for (int t = 0; t < n; ++t) if (tile(t).contains(x, y)) {
-                    if (tlActive()) assignSound(fSel, listIndex(t)); else loadPreset(listIndex(t));
+                    const int idx = listIndex(t);
+                    if (right && isOwn(idx)) { armRemoveOwn(idx); return true; }
+                    if (tlActive()) assignSound(fSel, idx); else loadPreset(idx);
                     return true;
                 }
             }
@@ -689,13 +758,14 @@ protected:
             }
             if (rEditBtn.contains(x, y)) { fPage = kPageEdit; repaint(); return true; }
         } else if (fPage == kPageEdit) {
+            float e[kParamCount]; editVals(e);
             for (int m = 0; m < 9; ++m) {
                 if (powerRect(m).contains(x, y)) { toggleModule(m); return true; }
                 const ModLayout& L = kLayouts[m];
-                if (L.toggle >= 0 && toggleRect(m).contains(x, y)) { setParam((uint32_t)L.toggle, fV[L.toggle] > 0.5f ? 0.0f : 1.0f, true); return true; }
+                if (L.toggle >= 0 && toggleRect(m).contains(x, y)) { setEv((uint32_t)L.toggle, e[L.toggle] > 0.5f ? 0.0f : 1.0f, true); return true; }
                 if (L.seg >= 0 && segRect(m).contains(x, y)) {
-                    for (int s = 0; s < L.segN; ++s) if (seg(segRect(m), s, L.segN).contains(x, y)) setParam((uint32_t)L.seg, (float)s, true);
-                    if (fV[kModules[m].on] < 0.5f) setParam(kModules[m].on, 1.0f, true);
+                    for (int s = 0; s < L.segN; ++s) if (seg(segRect(m), s, L.segN).contains(x, y)) setEv((uint32_t)L.seg, (float)s, true);
+                    if (e[kModules[m].on] < 0.5f) setEv(kModules[m].on, 1.0f, true);
                     return true;
                 }
             }
@@ -703,20 +773,53 @@ protected:
         return false;
     }
 
+    bool onKeyboard(const KeyboardEvent& ev) override
+    {
+        if (!fNaming) return false;
+        if (!ev.press) return true;
+        if (ev.key == kKeyEnter) { if (!keyRepeat(ev.key)) finishNaming(true); return true; }
+        if (ev.key == kKeyEscape) { if (!keyRepeat(ev.key)) finishNaming(false); return true; }
+        if (ev.key == kKeyBackspace || ev.key == kKeyDelete) {
+            if (keyRepeat(ev.key)) return true;
+            if (fNameFresh) { fNameText.clear(); fNameFresh = false; }
+            else if (!fNameText.empty()) {   // remove one whole UTF-8 character
+                size_t n = fNameText.size() - 1;
+                while (n > 0 && ((unsigned char)fNameText[n] & 0xC0) == 0x80) --n;
+                fNameText.resize(n);
+            }
+            repaint(); return true;
+        }
+        return true;
+    }
+    bool onCharacterInput(const CharacterInputEvent& ev) override
+    {
+        if (!fNaming) return false;
+        const uint c = ev.character;
+        if (c < 32 || c == 127 || c == '|') return true;
+        if (keyRepeat(0x10000 + c)) return true;
+        if (fNameFresh) { fNameText.clear(); fNameFresh = false; }   // typing replaces the suggested name
+        if (fNameText.size() >= 40) return true;
+        if (c < 0x80) fNameText += (char)c;
+        else if (c < 0x800) { fNameText += (char)(0xC0 | (c >> 6)); fNameText += (char)(0x80 | (c & 0x3F)); }
+        else if (c < 0x10000) { fNameText += (char)(0xE0 | (c >> 12)); fNameText += (char)(0x80 | ((c >> 6) & 0x3F)); fNameText += (char)(0x80 | (c & 0x3F)); }
+        repaint();
+        return true;
+    }
+
     bool onMotion(const MotionEvent& ev) override
     {
         float x, y; toDesign(ev.pos.getX(), ev.pos.getY(), x, y);
-        if (fDragPressed && !fDragStarted && (std::fabs(x - fPressX) > 4 || std::fabs(y - fPressY) > 4) && !fRenderPath.empty() && gf::canDragFiles()) {
-            fDragStarted = true;
-            const bool dropped = gf::dragFileOut(fRenderPath);
-            fDragPressed = false;
-            toast(dropped ? "Dropped into your DAW" : "Drag cancelled \xC2\xB7 file kept in Documents/Grainfield Renders");
-            repaint(); return true;
+        if (fDragPressed && !fDragStarted && (std::fabs(x - fPressX) > 4 || std::fabs(y - fPressY) > 4) && gf::canDragFiles()) {
+            if (renderReady()) { beginDrag(); return true; }
+            if (!fWantDrag) { fWantDrag = true; toast("Rendering \xC2\xB7 keep holding, the drag starts when it is ready"); }
+            return true;
         }
+        if (!fDragPressed && rDrag.contains(x, y) && !fNaming) startRender();   // hovering the tile: render ahead, so the drag is instant
         if (fDragKnob >= 0) {
             const Knob& kn = fKnobs[(size_t)fDragKnob];
             const bool fine = ev.mod & kModifierShift;
-            setParam(kn.param, fromNormFree(kn.param, fDragStartNorm + (fDragY - y) / (fine ? 900.0f : (kn.macro >= 0 ? 240.0f : 180.0f))), false);
+            const float nv = fromNormFree(kn.param, fDragStartNorm + (fDragY - y) / (fine ? 900.0f : (kn.macro >= 0 ? 240.0f : 180.0f)));
+            if (kn.macro < 0) setEv(kn.param, nv, false); else setParam(kn.param, nv, false);
             return true;
         }
         if (fDragSlider >= 0) { dragSlider(x); return true; }
@@ -725,7 +828,7 @@ protected:
         // hover
         int hk = knobAt(x, y), ht = -1, hc = -1;
         if (fPage == kPageSounds) {
-            for (int i = 0; i <= kNumCats; ++i) if (catRow(i).contains(x, y)) hc = i;
+            for (int i = 0; i <= kUiCats; ++i) if (catRow(i).contains(x, y)) hc = i;
             if (rList.contains(x, y) && y > rList.y + 32) { const int n = catCount(fCat); for (int t = 0; t < n; ++t) if (tile(t).contains(x, y)) ht = listIndex(t); }
         }
         if (fPage == kPageTimeline) ht = fHoverTile;   // set by the timeline page
@@ -740,10 +843,12 @@ protected:
         const int k = knobAt(x, y);
         if (k >= 0) {
             const Knob& kn = fKnobs[(size_t)k];
-            if (kn.macro < 0 && macroFor(fV, kn.param) >= 0) return true;
+            float e[kParamCount]; editVals(e);
+            const float* S = kn.macro < 0 ? e : fV;
+            if (kn.macro < 0 && macroFor(e, kn.param) >= 0) return true;
             const ParamInfo in = getParamInfo(kn.param);
-            if (in.isInt()) setParam(kn.param, fV[kn.param] + (d > 0 ? 1 : -1), true);
-            else setParam(kn.param, fromNormFree(kn.param, toNorm(kn.param, fV[kn.param]) + (d > 0 ? 0.03f : -0.03f)), true);
+            const float nv = in.isInt() ? S[kn.param] + (d > 0 ? 1 : -1) : fromNormFree(kn.param, toNorm(kn.param, S[kn.param]) + (d > 0 ? 0.03f : -0.03f));
+            if (kn.macro < 0) setEv(kn.param, nv, true); else setParam(kn.param, nv, true);
             return true;
         }
         if (fPage == kPageSounds && rList.contains(x, y)) {
@@ -753,7 +858,12 @@ protected:
         }
         if (rPresetBox.contains(x, y)) { stepPreset(d > 0 ? -1 : 1); return true; }
         if (fPage == kPageTimeline && rFadeAll.contains(x, y)) { setFadeAll(clampf(fadeAllValue() + (d > 0 ? 0.05f : -0.05f), 0, 1)); return true; }
-        if (fPage == kPageTimeline) for (int t = 0; t < kTiles; ++t) if (tileT(t).contains(x, y)) { fTlCat = (fTlCat + (d > 0 ? kNumCats - 1 : 1)) % kNumCats; repaint(); return true; }
+        if (fPage == kPageTimeline) for (int t = 0; t < kTiles; ++t) if (tileT(t).contains(x, y)) {
+            const int rows = (catCount(fTlCat) + 3) / 4;
+            if (rows > kTiles / 4) fTlScroll = std::max(0, std::min(rows - kTiles / 4, fTlScroll + (d > 0 ? -1 : 1)));   // a long list scrolls
+            else { fTlCat = (fTlCat + (d > 0 ? kUiCats - 1 : 1)) % kUiCats; fTlScroll = 0; }                            // otherwise: next category
+            repaint(); return true;
+        }
         if (fPage == kPageSounds && (rDryWet.contains(x, y) || rOutSl.contains(x, y))) {
             const uint32_t p = rDryWet.contains(x, y) ? kDryWet : kOut;
             setParam(p, fromNormFree(p, toNorm(p, fV[p]) + (d > 0 ? 0.03f : -0.03f)), true); return true;
@@ -764,21 +874,20 @@ protected:
 private:
     float fV[kParamCount];
     std::vector<Knob> fKnobs;
-    std::unique_ptr<SampleData> fSample;
+    std::shared_ptr<SampleData> fSample;   // shared with a render running in the background
     std::string fName; bool fBuiltin = true;
     std::vector<float> fPeaks;
     FontId fFontMed = 0, fFontSemi = 0, fFontBold = 0;
     float fScale = 1, fOffX = 0, fOffY = 0;
     int fPage = kPageSounds;
     // timeline page state
-    int fSel = 0, fTlCat = 0, fDragCut = -1, fDragFade = -1, fHoverCut = -1, fHoverPrev = -1;
+    int fSel = 0, fTlCat = 0, fTlScroll = 0, fDragCut = -1, fDragFade = -1, fHoverCut = -1, fHoverPrev = -1;
     bool fFromStart = false, fDragFadeAll = false;
     int fCat = 0, fScrollRows = 0, fHoverTile = -1, fHoverCat = -1, fHoverKnob = -1;
-    int fDragKnob = -1, fDragSlider = -1, fDragRegion = -1;
+    int fDragKnob = -1, fDragSlider = -1, fDragRegion = -1; bool fDragHost = true;
     float fDragY = 0, fDragStartNorm = 0, fLastX = 0, fLastY = 0, fPressX = 0, fPressY = 0;
     uint fLastClick = 0;
     bool fDragPressed = false, fDragStarted = false;
-    std::string fRenderPath;
     int fPasses = 1;
     std::string fToast; int fToastTime = 0;
     float fPulse = 0, fGlow = 0, fEndTimer = 0, fStopHold = 0; double fLastIdle = 0;
@@ -786,7 +895,7 @@ private:
     bool soundingNow() const { return fStopHold <= 0 && (fV[kPlay] > 0.5f || fV[kOutPlaying] > 0.5f || fV[kOutLevel] > 0.004f); }
     void hardStop() { setParam(kPlay, 0.0f, true); setParam(kStop, (float)(((int)fV[kStop] + 1) % 100000), true); fStopHold = 0.4f; repaint(); }
 
-    int cur() const { return std::min(kNumPresets - 1, std::max(0, (int)fV[kMacroSet])); }
+    int cur() const { const int v = (int)fV[kMacroSet]; return soundExists(v) ? v : std::min(kNumPresets - 1, std::max(0, v)); }
 
     void updateScale(uint w, uint h)
     {
@@ -809,22 +918,129 @@ private:
         repaint();
     }
     void toggleModule(int m) {
-        const bool on = fV[kModules[m].on] > 0.5f;
-        setParam(kModules[m].on, on ? 0.0f : 1.0f, true);
-        toast(std::string(kModules[m].name) + (on ? " off" : " on"));
+        float e[kParamCount]; editVals(e);
+        const bool on = e[kModules[m].on] > 0.5f;
+        setEv(kModules[m].on, on ? 0.0f : 1.0f, true);
+        char b[64]; std::snprintf(b, sizeof b, "Section %d: ", fSel + 1);
+        toast((tlActive() ? std::string(b) : std::string()) + kModules[m].name + (on ? " off" : " on"));
     }
+
+    // ---- what the EDIT page shows and changes: the single sound, or (timeline on) the selected section's own copy
+    float fSecOv[kMaxSections][kNumEdit];
+    void editVals(float* out) const {
+        std::memcpy(out, fV, sizeof fV);
+        if (!tlActive()) return;
+        float sv[kParamCount]; sectionValues(secSound(fSel), fSecOv[fSel], sv);
+        for (uint32_t i = kEditFirst; i <= kEditLast; ++i) out[i] = sv[i];
+        out[kMacroSet] = sv[kMacroSet]; out[kTrim] = sv[kTrim];
+        for (int m = 0; m < 4; ++m) out[kM1 + (uint32_t)m] = fV[slotParam(fSel, kSfM1 + m)];
+    }
+    void setEv(uint32_t idx, float v, bool gesture) {
+        if (!tlActive() || idx < kEditFirst || idx > kEditLast) { setParam(idx, v, gesture); return; }
+        const ParamInfo in = getParamInfo(idx);
+        v = std::min(in.max, std::max(in.min, v)); if (in.isInt()) v = std::round(v);
+        float pv[kParamCount]; presetValues(secSound(fSel), pv);
+        fSecOv[fSel][idx - kEditFirst] = std::fabs(v - pv[idx]) < 1e-6f ? kNoEdit : v;   // back to the sound's own value = no edit
+        sendEdits(); repaint();
+    }
+    void resetEv(uint32_t idx) {
+        if (!tlActive()) { float pv[kParamCount]; presetValues(cur(), pv); setParam(idx, pv[idx], true); return; }
+        if (idx >= kEditFirst && idx <= kEditLast) { fSecOv[fSel][idx - kEditFirst] = kNoEdit; sendEdits(); repaint(); }
+    }
+    void sendEdits() { setState("sec_edits", editsToText(fSecOv, kMaxSections).c_str()); }
+    bool secEdited(int s, bool withMacros = false) const {
+        if (s < 0 || s >= kMaxSections) return false;
+        for (float v : fSecOv[s]) if (hasEdit(v)) return true;
+        if (withMacros) { const Preset& pr = presetAt(secSound(s)); for (int m = 0; m < 4; ++m) if (std::fabs(fV[slotParam(s, kSfM1 + m)] - pr.mdef[m]) > 0.004f) return true; }
+        return false;
+    }
+    bool soundEdited() const {
+        float pv[kParamCount]; presetValues(cur(), pv);
+        for (uint32_t i = kEditFirst; i <= kEditLast; ++i) if (macroFor(fV, i) < 0 && std::fabs(toNorm(i, fV[i]) - toNorm(i, pv[i])) > 1e-4f) return true;
+        for (int m = 0; m < 4; ++m) if (std::fabs(fV[kM1 + (uint32_t)m] - pv[kM1 + (uint32_t)m]) > 0.004f) return true;
+        return false;
+    }
+    bool canSaveOwn() const { return tlActive() ? secEdited(fSel, true) : soundEdited(); }
+
+    // ---- SAVE AS OWN PRESET: name entry
+    bool fNaming = false, fNameFresh = false; std::string fNameText;
+    int fDelArm = -1; double fDelArmTime = 0;
+    Rect nameField() const { return { rNameBox.x + 14, rNameBox.y + 30, rNameBox.w - 28, 26 }; }
+    Rect nameSave() const { return { rNameBox.x + 14, rNameBox.y + 62, (rNameBox.w - 36) * 0.5f, 24 }; }
+    Rect nameCancel() const { return { rNameBox.x + 22 + (rNameBox.w - 36) * 0.5f, rNameBox.y + 62, (rNameBox.w - 36) * 0.5f, 24 }; }
+    // right-click an own preset twice to take it out of the library
+    void armRemoveOwn(int idx) {
+        const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        if (fDelArm == idx && now - fDelArmTime < 4.0) {
+            const std::string n = presetAt(idx).name;
+            fDelArm = -1;
+            toast(ownRemove(idx) ? "Removed \"" + n + "\" from your own presets" : std::string("Could not update Documents/Lumen/Own Presets.txt"));
+            return;
+        }
+        fDelArm = idx; fDelArmTime = now;
+        toast(std::string("Right-click \"") + presetAt(idx).name + "\" again to remove it from your own presets");
+    }
+    void startNaming() {
+        float e[kParamCount]; editVals(e);
+        const Preset& pr = presetAt((int)e[kMacroSet]);
+        fNameText = isOwn((int)e[kMacroSet]) ? std::string(pr.name) + " 2" : std::string(pr.name) + " (mine)";
+        if (fNameText.size() > 40) fNameText.resize(40);
+        fNaming = true; fNameFresh = true;
+        getWindow().focus();
+        repaint();
+    }
+    void finishNaming(bool apply) {
+        if (!fNaming) return;
+        fNaming = false;
+        gf::returnKeyboardFocus(getWindow().getNativeWindowHandle());
+        if (apply) saveOwn(fNameText.empty() ? std::string("My sound") : fNameText);
+        repaint();
+    }
+    void saveOwn(const std::string& name) {
+        float e[kParamCount]; editVals(e);
+        int base = (int)e[kMacroSet]; if (const OwnPreset* o = ownAt(base)) base = o->base;
+        const int idx = ownAdd(name.c_str(), e, base);
+        if (idx < 0) { toast("Could not save it (Documents/Lumen not writable, or 200 own presets already)"); return; }
+        if (tlActive()) {
+            setParam(slotParam(fSel, kSfSound), (float)idx, true);
+            for (float& v : fSecOv[fSel]) v = kNoEdit;
+            sendEdits();
+            fTlCat = kOwnCat; fTlScroll = 0;
+        } else { setParam(kMacroSet, (float)idx, true); fCat = kOwnCat; fScrollRows = 0; }
+        toast("Saved \"" + name + "\" \xC2\xB7 it is in OWN PRESETS now, in every project");
+    }
+    void drawNameBox() {
+        card(rNameBox);
+        title(rNameBox.x + 14, rNameBox.y + 16, "NAME YOUR SOUND", cPeach);
+        const Rect f = nameField();
+        beginPath(); roundedRect(f.x, f.y, f.w, f.h, 8); fillC(cWell); fill(); strokeColor(255, 196, 128, 160); strokeWidth(1.2f); stroke();
+        fontFaceId(fFontSemi); fontSize(11); textLetterSpacing(0.2f);
+        Rectangle<float> tb; textBounds(0, 0, fNameText.c_str(), nullptr, tb);
+        if (fNameFresh && !fNameText.empty()) { beginPath(); roundedRect(f.x + 8, f.y + 5, tb.getWidth() + 4, f.h - 10, 3); fillC(cRose, 90); fill(); }
+        txt(f.x + 10, f.cy() + 0.5f, fNameText.c_str(), cText, 11, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 0.2f);
+        if (!fNameFresh && std::fmod(fPulse, 1.0f) < 0.6f) { beginPath(); rect(f.x + 11 + tb.getWidth(), f.y + 6, 1.5f, f.h - 12); fillC(cPeach); fill(); }
+        pill(nameSave(), "SAVE  (ENTER)", true, 8.5f);
+        pill(nameCancel(), "CANCEL  (ESC)", false, 8.5f);
+    }
+    bool keyRepeat(uint k) {   // some hosts deliver a key twice
+        const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        const bool dup = k == fLastKey && now - fLastKeyTime < 0.012;
+        fLastKey = k; fLastKeyTime = now;
+        return dup;
+    }
+    uint fLastKey = 0; double fLastKeyTime = 0;
     void loadPreset(int idx)
     {
         float p[kParamCount]; presetValues(idx, p);
         for (uint32_t i = 0; i < kNumIn; ++i) { if (presetKeeps(i)) continue; if (fV[i] != p[i]) { fV[i] = p[i]; setParameterValue(i, p[i]); } }
-        toast(std::string("Sound: ") + kPresets[idx].name);
+        toast(std::string("Sound: ") + presetAt(idx).name);
         repaint();
     }
     // =========================================================================================
     // TIMELINE
     bool tlActive() const { return fV[kTlOn] > 0.5f && sectionCount(fV) >= 2; }
     int secCount() const { return sectionCount(fV); }
-    int secSound(int s) const { return std::min(kNumPresets - 1, std::max(0, (int)fV[slotParam(std::max(0, std::min(kMaxSections - 1, s)), kSfSound)])); }
+    int secSound(int s) const { const int v = (int)fV[slotParam(std::max(0, std::min(kMaxSections - 1, s)), kSfSound)]; return soundExists(v) ? v : std::min(kNumPresets - 1, std::max(0, v)); }
     float secStart(int s) const { return sectionStart(fV, s); }
     float secEnd(int s) const { return s + 1 < secCount() ? secStart(s + 1) : 1.0f; }
     float laneX(float f) const { return rLanes.x + clampf(f, 0, 1) * rLanes.w; }
@@ -834,33 +1050,40 @@ private:
         if (k < 1 || k >= secCount()) return 0;
         return clampf(fV[slotParam(k, kSfFade)], 0, 1) * std::max(0.0f, std::min(secStart(k) - secStart(k - 1), secEnd(k) - secStart(k)));
     }
-    Col secCol(int s) const { return { kSecCol[s][0], kSecCol[s][1], kSecCol[s][2] }; }
+    Col secCol(int s) const { const int c = ((s % kSecColors) + kSecColors) % kSecColors; return { kSecCol[c][0], kSecCol[c][1], kSecCol[c][2] }; }
     Rect playIcon(int s) const { const float x0 = laneX(secStart(s)) + (s > 0 ? fadeWidth(s) * 0.5f * rLanes.w : 0.0f); return { x0 + 6, rLanes.y + 6, 20, 20 }; }
 
     void selectSection(int s) {
         fSel = std::max(0, std::min(secCount() - 1, s));
         for (auto& k : fKnobs) if (k.macro >= 10) k.param = slotParam(fSel, kSfM1 + (k.macro - 10));
-        fTlCat = kPresets[secSound(fSel)].cat;
+        fTlCat = presetAt(secSound(fSel)).cat; fTlScroll = 0;
         repaint();
     }
-    void copySlot(int from, int to) { for (int f = 0; f < kSlotParams; ++f) setParam(slotParam(to, f), fV[slotParam(from, f)], true); }
+    void copySlot(int from, int to) {
+        for (int f = 0; f < kSlotParams; ++f) setParam(slotParam(to, f), fV[slotParam(from, f)], true);
+        std::memcpy(fSecOv[to], fSecOv[from], sizeof fSecOv[0]);   // the section's edits move with it
+    }
     void assignSound(int s, int idx) {
         setParam(slotParam(s, kSfSound), (float)idx, true);
-        for (int m = 0; m < 4; ++m) setParam(slotParam(s, kSfM1 + m), kPresets[idx].mdef[m], true);
-        char b[96]; std::snprintf(b, sizeof b, "Section %d: %s", s + 1, kPresets[idx].name); toast(b);
-        if (s == fSel) fTlCat = kPresets[idx].cat;
+        for (int m = 0; m < 4; ++m) setParam(slotParam(s, kSfM1 + m), presetAt(idx).mdef[m], true);
+        if (secEdited(s, false)) { for (float& v : fSecOv[s]) v = kNoEdit; sendEdits(); }   // a new sound starts without edits
+        char b[96]; std::snprintf(b, sizeof b, "Section %d: %s", s + 1, presetAt(idx).name); toast(b);
+        if (s == fSel && presetAt(idx).cat != fTlCat) { fTlCat = presetAt(idx).cat; fTlScroll = 0; }
     }
     void openTimeline() {
         fPage = kPageTimeline;
-        if (secCount() <= 1) {   // a fresh timeline starts with the sound you have
+        if (secCount() <= 1) {   // a fresh timeline starts with the sound you have, including your edits
             setParam(slotParam(0, kSfSound), (float)cur(), true);
             for (int m = 0; m < 4; ++m) setParam(slotParam(0, kSfM1 + m), fV[kM1 + m], true);
+            float pv[kParamCount]; presetValues(cur(), pv);
+            for (uint32_t i = kEditFirst; i <= kEditLast; ++i) fSecOv[0][i - kEditFirst] = std::fabs(fV[i] - pv[i]) > 1e-6f ? fV[i] : kNoEdit;
+            sendEdits();
         }
         selectSection(std::min(fSel, secCount() - 1));
     }
     void addCutAt(float f) {
         const int n = secCount();
-        if (n >= kMaxSections) { toast("6 sounds is the maximum"); return; }
+        if (n >= kMaxSections) { toast("32 sounds is the maximum"); return; }
         const int j = secAt(f);
         if (f < secStart(j) + 0.01f || f > secEnd(j) - 0.01f) { toast("Too close to the next line"); return; }
         for (int k = n - 1; k > j; --k) copySlot(k, k + 1);   // make room
@@ -868,6 +1091,7 @@ private:
         setParam(slotParam(j + 1, kSfStart), f, true);
         setParam(slotParam(j + 1, kSfFade), n >= 2 ? fadeAllValue() : 0.5f, true);
         setParam(kTlCount, (float)(n + 1), true);
+        sendEdits();
         if (fV[kTlOn] < 0.5f) setParam(kTlOn, 1.0f, true);
         selectSection(j + 1);
         char b[96]; std::snprintf(b, sizeof b, "Section %d added \xC2\xB7 now pick its sound below", j + 2); toast(b);
@@ -878,6 +1102,8 @@ private:
         if (s == 0) { const float keep = 0.0f; for (int k = 0; k < n - 1; ++k) copySlot(k + 1, k); setParam(slotParam(0, kSfStart), keep, true); }
         else for (int k = s; k < n - 1; ++k) copySlot(k + 1, k);
         setParam(kTlCount, (float)(n - 1), true);
+        for (float& v : fSecOv[n - 1]) v = kNoEdit;
+        sendEdits();
         selectSection(std::max(0, s - 1));
         toast(n - 1 >= 2 ? "Section removed" : "One sound left \xC2\xB7 the timeline is now just that sound");
     }
@@ -890,13 +1116,13 @@ private:
         setParam(kPlay, 1.0f, true); fStopHold = 0;
     }
     void stepSectionSound(int d) {
-        const int c = kPresets[secSound(fSel)].cat;
-        int list[kNumPresets], n = 0, at = 0;
-        for (int i = 0; i < kNumPresets; ++i) if (kPresets[i].cat == c) { if (i == secSound(fSel)) at = n; list[n++] = i; }
-        assignSound(fSel, list[((at + d) % n + n) % n]);
+        const int c = presetAt(secSound(fSel)).cat, n = catCount(c);
+        if (n <= 0) return;
+        int at = 0; for (int k = 0; k < n; ++k) if (catNth(c, k) == secSound(fSel)) at = k;
+        assignSound(fSel, catNth(c, ((at + d) % n + n) % n));
     }
-    int sectionTileSound(int t) const { int n = 0; for (int i = 0; i < kNumPresets; ++i) if (kPresets[i].cat == fTlCat) { if (n == t) return i; ++n; } return -1; }
-    Rect tilePlay(int t) const { const Rect r = tileT(t); return { r.x + r.w - 28, r.y + 4, 22, 22 }; }
+    int sectionTileSound(int t) const { return catNth(fTlCat, t + fTlScroll * 4); }
+    Rect tilePlay(int t) const { const Rect r = tileT(t); return { r.x + r.w - 26, r.y + 2, 22, 22 }; }
 
     void playGlyph(float cx, float cy, float r, bool hot, Col c) {
         beginPath(); circle(cx, cy, r); fillColor(hot ? c.r : 20, hot ? c.g : 14, hot ? c.b : 24, hot ? 255 : 200); fill();
@@ -950,7 +1176,7 @@ private:
             if (x1 - pi.x < 26) continue;
             playGlyph(pi.cx(), pi.cy(), 9, fHoverPrev == s, c);
             save(); scissor(pi.x + 24, r.y, std::max(0.0f, x1 - pi.x - 30), r.h);
-            char b[64]; std::snprintf(b, sizeof b, "%d  %s", s + 1, kPresets[secSound(s)].name);
+            char b[64]; std::snprintf(b, sizeof b, "%d  %s%s", s + 1, presetAt(secSound(s)).name, secEdited(s) ? " *" : "");
             txt(pi.x + 26, pi.cy() + 0.5f, b, s == fSel ? cText : cSub, 10, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 0.3f);
             restore();
             if (s == fSel) { beginPath(); roundedRect(x0 + 1, r.y + 1, x1 - x0 - 2, r.h - 2, 6); strokeColor(c.r, c.g, c.b, 230); strokeWidth(2); stroke(); }
@@ -997,7 +1223,9 @@ private:
         txt(rFrom.x - 8, rFrom.cy() + 0.5f, "PREVIEW", cDim, 7.5f, ALIGN_RIGHT | ALIGN_MIDDLE, fFontBold, 1.2f);
         static const char* fromN[2] = { "FROM SECTION", "FROM START" };
         segmented(rFrom, fromN, 2, fFromStart ? 1 : 0, 8);
-        for (int i = 0; i < kNumCats; ++i) pill(chipT(i), kCatShort[i], i == fTlCat, 8);
+        for (int i = 0; i < kUiCats; ++i) pill(chipT(i), kCatShort[i], i == fTlCat, 8, i == kOwnCat ? cPeach : cText);
+        if (catCount(fTlCat) > kTiles) txt(rPickCard.x + rPickCard.w - 14, rPickCard.y + rPickCard.h - 7, "scroll for more", cDim, 7.5f, ALIGN_RIGHT | ALIGN_MIDDLE, fFontMed, 0.3f);
+        if (fTlCat == kOwnCat && ownCount() == 0) txt(rPickCard.x + 24, 560, "No own presets yet \xC2\xB7 edit a sound and click SAVE AS OWN PRESET", cSub, 10, ALIGN_LEFT | ALIGN_MIDDLE, fFontMed, 0.3f);
         for (int tI = 0; tI < kTiles; ++tI) {
             const int idx = sectionTileSound(tI); if (idx < 0) break;
             const Rect tr = tileT(tI);
@@ -1005,7 +1233,9 @@ private:
             beginPath(); roundedRect(tr.x, tr.y, tr.w, tr.h, 9);
             if (sel) { fillColor(sc.r, sc.g, sc.b, 230); fill(); }
             else { fillColor(255, 255, 255, hov ? 22 : 9); fill(); strokeColor(255, 255, 255, hov ? 40 : 14); strokeWidth(1); stroke(); }
-            txt(tr.x + 12, tr.cy() + 0.5f, kPresets[idx].name, sel ? cInk : cText, 10, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 0.3f);
+            save(); scissor(tr.x, tr.y, tr.w - 30, tr.h);
+            txt(tr.x + 12, tr.cy() + 0.5f, presetAt(idx).name, sel ? cInk : cText, 10, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 0.3f);
+            restore();
             const Rect pb = tilePlay(tI);
             playGlyph(pb.cx(), pb.cy(), 9, fHoverPrev == 100 + tI, sel ? Col{ 255, 255, 255 } : sc);
         }
@@ -1044,13 +1274,16 @@ private:
             selectSection(secAt(f));
             return true;
         }
-        if (rAddSec.contains(x, y)) { addCutAt((secStart(fSel) + secEnd(fSel)) * 0.5f); return true; }
+        if (rAddSec.contains(x, y)) {   // split the longest section in the middle, so new sections always find room
+            int best = 0; for (int s2 = 1; s2 < n; ++s2) if (secEnd(s2) - secStart(s2) > secEnd(best) - secStart(best)) best = s2;
+            addCutAt((secStart(best) + secEnd(best)) * 0.5f); return true;
+        }
         if (rDelSec.contains(x, y)) { if (n < 2) toast("Only one sound \xC2\xB7 nothing to remove"); else deleteSection(fSel); return true; }
         if (rFadeAll.contains(x, y)) { fDragFadeAll = true; setFadeAll((x - rFadeAll.x) / rFadeAll.w); return true; }
         if (rCurve.contains(x, y)) { for (int i = 0; i < 3; ++i) if (seg(rCurve, i, 3).contains(x, y)) setParam(kTlCurve, (float)i, true); return true; }
         if (rTails.contains(x, y)) { for (int i = 0; i < 2; ++i) if (seg(rTails, i, 2).contains(x, y)) setParam(kTlTails, (float)i, true); return true; }
         if (rFrom.contains(x, y)) { fFromStart = x >= rFrom.cx(); repaint(); return true; }
-        for (int i = 0; i < kNumCats; ++i) if (chipT(i).contains(x, y)) { fTlCat = i; repaint(); return true; }
+        for (int i = 0; i < kUiCats; ++i) if (chipT(i).contains(x, y)) { fTlCat = i; fTlScroll = 0; repaint(); return true; }
         for (int t = 0; t < kTiles; ++t) if (tileT(t).contains(x, y)) {
             const int idx = sectionTileSound(t); if (idx < 0) return true;
             assignSound(fSel, idx);
@@ -1140,27 +1373,84 @@ private:
         }
         for (auto& v : fPeaks) v /= gmax;
     }
-    void renderToFile()
-    {
+    // ---- DRAG TO DAW: rendering runs on its own thread, starts when the mouse reaches the tile, and is reused while
+    //      nothing changes, so the editor never freezes and the drag is usually instant.
+    struct RenderJob {
+        std::thread th; std::atomic<bool> done { false }, cancel { false }; std::atomic<float> progress { 0 };
+        uint64_t key = 0; std::string path; bool ok = false;
+    };
+    std::unique_ptr<RenderJob> fJob;
+    std::string fRenderPath; uint64_t fRenderKey = 0;
+    bool fWantDrag = false, fRevealWhenDone = false; int fRenderCount = 0;
+
+    uint64_t renderKey() const {
+        uint64_t h = 1469598103934665603ull;
+        auto mix = [&](const void* d, size_t n) { const unsigned char* b = (const unsigned char*)d; for (size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 1099511628211ull; } };
+        for (uint32_t i = 0; i < kNumIn; ++i) { if (i == kPlay || i == kCue || i == kStop || i == kPlayFrom) continue; mix(&fV[i], sizeof(float)); }
+        mix(fSecOv, sizeof fSecOv);
+        const void* sp = fSample.get(); mix(&sp, sizeof sp);
+        mix(&fPasses, sizeof fPasses);
+        const double sr = getSampleRate(), bpm = fV[kOutBpm]; mix(&sr, sizeof sr); mix(&bpm, sizeof bpm);
+        return h;
+    }
+    bool rendering() const { return fJob && !fJob->done.load(); }
+    bool renderReady() const { return !fRenderPath.empty() && fRenderKey == renderKey() && !rendering(); }
+    void startRender() {
         if (!fSample || fSample->empty()) return;
+        const uint64_t key = renderKey();
+        if (!rendering() && !fRenderPath.empty() && fRenderKey == key) return;       // already have it
+        if (fJob && rendering() && fJob->key == key) return;                          // already on it
+        if (fJob) { fJob->cancel.store(true); if (fJob->th.joinable()) fJob->th.join(); fJob.reset(); }
+        std::unique_ptr<RenderJob> job(new RenderJob());
+        job->key = key;
+        // everything the render needs is copied now; the editor can go on changing things
+        std::vector<float> params(fV, fV + kParamCount);
+        std::vector<float> edits(&fSecOv[0][0], &fSecOv[0][0] + kMaxSections * kNumEdit);
+        std::shared_ptr<SampleData> smp = fSample;
         const double bpm = fV[kOutBpm] > 20 ? fV[kOutBpm] : 120.0;
         const double sr = getSampleRate() > 8000 ? getSampleRate() : 44100.0;
-        std::vector<float> L, R;
-        renderLumenOffline(fV, *fSample, sr, bpm, fPasses, L, R);
+        const int passes = fPasses;
         std::string name = fBuiltin ? std::string("Built-in") : fName;
         const size_t dot = name.find_last_of('.'); if (!fBuiltin && dot != std::string::npos) name = name.substr(0, dot);
-        std::string pn = fV[kOriginal] > 0.5f ? std::string("Original") : std::string(presetAt(cur()).name);
-        for (auto* s : { &name, &pn }) { for (auto& ch : *s) if (std::strchr("/\\:*?\"<>|", ch)) ch = '_'; if (s->size() > 40) s->resize(40); }
-        std::time_t t = std::time(nullptr); char stamp[32]; std::strftime(stamp, sizeof stamp, "%H%M%S", std::localtime(&t));
-        char file[256]; std::snprintf(file, sizeof file, "Lumen - %s - %s - %s.wav", name.c_str(), pn.c_str(), stamp);
-        const std::string dir = gf::rendersFolder();
+        std::string pn = fV[kOriginal] > 0.5f ? std::string("Original") : tlActive() ? std::string("Timeline") : std::string(presetAt(cur()).name);
+        for (auto* t : { &name, &pn }) { for (auto& ch : *t) if (std::strchr("/\\:*?\"<>|", ch)) ch = '_'; if (t->size() > 40) t->resize(40); }
+        std::time_t tt = std::time(nullptr); char stamp[32]; std::strftime(stamp, sizeof stamp, "%H%M%S", std::localtime(&tt));
+        char file[256]; std::snprintf(file, sizeof file, "Lumen - %s - %s - %s%s.wav", name.c_str(), pn.c_str(), stamp, (++fRenderCount % 2) ? "" : "b");
 #ifdef _WIN32
-        fRenderPath = dir + "\\" + file;
+        job->path = gf::rendersFolder() + "\\" + file;
 #else
-        fRenderPath = dir + "/" + file;
+        job->path = gf::rendersFolder() + "/" + file;
 #endif
-        if (!gf::writeWav24(fRenderPath, L, R, (unsigned)sr)) { toast("Could not write render"); fRenderPath.clear(); }
+        RenderJob* j = job.get();
+        job->th = std::thread([j, params, edits, smp, bpm, sr, passes]() {
+            std::vector<float> L, R;
+            renderLumenOffline(params.data(), *smp, sr, bpm, passes, L, R, reinterpret_cast<const float (*)[kNumEdit]>(edits.data()), &j->progress, &j->cancel);
+            j->ok = !j->cancel.load() && !L.empty() && gf::writeWav24(j->path, L, R, (unsigned)sr);
+            j->done.store(true);
+        });
+        fJob = std::move(job);
+        repaint();
     }
+    void pollRender() {
+        if (!fJob) return;
+        if (!fJob->done.load()) { repaint(); return; }
+        if (fJob->th.joinable()) fJob->th.join();
+        const bool ok = fJob->ok;
+        if (ok) { fRenderPath = fJob->path; fRenderKey = fJob->key; }
+        else if (!fJob->cancel.load()) toast("Could not write the render to Documents/Grainfield Renders");
+        fJob.reset();
+        if (ok && fWantDrag && fDragPressed && !fDragStarted) beginDrag();
+        else if (ok && fRevealWhenDone) { fRevealWhenDone = false; revealRender(); }
+        repaint();
+    }
+    void beginDrag() {
+        fDragStarted = true; fWantDrag = false;
+        const bool dropped = gf::dragFileOut(fRenderPath);   // the OS drag (returns when dropped or cancelled)
+        fDragPressed = false;
+        toast(dropped ? "Dropped into your DAW" : "Drag cancelled \xC2\xB7 file kept in Documents/Grainfield Renders");
+        repaint();
+    }
+    void revealRender() { gf::revealFile(fRenderPath); toast("Saved: " + gf::fileNameOf(fRenderPath.c_str())); }
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LumenUI)
 };

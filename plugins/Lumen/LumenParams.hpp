@@ -17,7 +17,7 @@ enum : uint32_t { F_INT = 1, F_LOG = 2, F_BOOL = 4, F_OUT = 8 };
     X(kT##n##M2,   "Section " #n " Macro 2", "t" #n "_m2",    0, 1, 0.5f, 0) \
     X(kT##n##M3,   "Section " #n " Macro 3", "t" #n "_m3",    0, 1, 0.5f, 0) \
     X(kT##n##M4,   "Section " #n " Macro 4", "t" #n "_m4",    0, 1, 0.5f, 0) \
-    X(kT##n##Start,"Section " #n " Start",   "t" #n "_start", 0, 1, (n - 1) / 6.0f, 0) \
+    X(kT##n##Start,"Section " #n " Start",   "t" #n "_start", 0, 1, n <= 6 ? (n - 1) / 6.0f : 1.0f, 0) \
     X(kT##n##Fade, "Section " #n " Fade In", "t" #n "_fade",  0, 1, 0.5f, 0)
 
 // X(id, name, symbol, min, max, def, flags)
@@ -112,12 +112,17 @@ enum : uint32_t { F_INT = 1, F_LOG = 2, F_BOOL = 4, F_OUT = 8 };
     X(kRMix,      "Reverb Mix",        "r_mix",       0, 1, 0.3f, 0) \
     /* TIMELINE: fade between sounds over the sample */ \
     X(kTlOn,      "Timeline On",       "tl_on",       0, 1, 0, F_INT | F_BOOL) \
-    X(kTlCount,   "Timeline Sections", "tl_count",    1, 6, 1, F_INT) \
+    X(kTlCount,   "Timeline Sections", "tl_count",    1, 32, 1, F_INT) \
     X(kTlCurve,   "Timeline Curve",    "tl_curve",    0, 2, 0, F_INT) \
     X(kTlTails,   "Timeline Tails",    "tl_tails",    0, 1, 0, F_INT) \
     LUMEN_SLOT(X, 1) LUMEN_SLOT(X, 2) LUMEN_SLOT(X, 3) LUMEN_SLOT(X, 4) LUMEN_SLOT(X, 5) LUMEN_SLOT(X, 6) \
     /* 1.2.1: every change = hard stop (all voices, echoes and reverb tails). Appended so older projects keep their parameter numbers. */ \
-    X(kStop,      "Stop All",          "stop_all",    0, 100000, 0, F_INT)
+    X(kStop,      "Stop All",          "stop_all",    0, 100000, 0, F_INT) \
+    /* 1.3: sections 7..32 (appended, so older projects keep their parameter numbers) */ \
+    LUMEN_SLOT(X, 7) LUMEN_SLOT(X, 8) LUMEN_SLOT(X, 9) LUMEN_SLOT(X, 10) LUMEN_SLOT(X, 11) LUMEN_SLOT(X, 12) LUMEN_SLOT(X, 13) \
+    LUMEN_SLOT(X, 14) LUMEN_SLOT(X, 15) LUMEN_SLOT(X, 16) LUMEN_SLOT(X, 17) LUMEN_SLOT(X, 18) LUMEN_SLOT(X, 19) LUMEN_SLOT(X, 20) \
+    LUMEN_SLOT(X, 21) LUMEN_SLOT(X, 22) LUMEN_SLOT(X, 23) LUMEN_SLOT(X, 24) LUMEN_SLOT(X, 25) LUMEN_SLOT(X, 26) LUMEN_SLOT(X, 27) \
+    LUMEN_SLOT(X, 28) LUMEN_SLOT(X, 29) LUMEN_SLOT(X, 30) LUMEN_SLOT(X, 31) LUMEN_SLOT(X, 32)
 
 #define LUMEN_ENUM(id, n, s, mn, mx, d, f) id,
 enum Param : uint32_t {
@@ -164,13 +169,15 @@ inline bool presetKeeps(uint32_t i) { return i == kPlay || i == kLoop || i == kK
 inline float clampf(float v, float a, float b) { return v < a ? a : (v > b ? b : v); }
 
 // ---- timeline
-constexpr int kMaxSections = 6, kSlotParams = 7;
+constexpr int kMaxSections = 32, kSlotParams = 7, kOldSections = 6;   // slots 1..6 sit before STOP, 7..32 after it
 enum SlotField { kSfSound = 0, kSfM1, kSfM2, kSfM3, kSfM4, kSfStart, kSfFade };
-inline uint32_t slotParam(int s, int field) { return kT1Snd + (uint32_t)(s * kSlotParams + field); }
+inline uint32_t slotParam(int s, int field) { return s < kOldSections ? kT1Snd + (uint32_t)(s * kSlotParams + field) : kT7Snd + (uint32_t)((s - kOldSections) * kSlotParams + field); }
+inline bool isSlotParam(uint32_t i) { return (i >= kT1Snd && i < kT1Snd + kOldSections * kSlotParams) || (i >= kT7Snd && i < kT7Snd + (kMaxSections - kOldSections) * kSlotParams); }
 inline constexpr const char* kCurveNames[] = { "SMOOTH", "LINEAR", "SHARP" };
 inline constexpr const char* kTailNames[]  = { "TAILS RING", "TAILS CUT" };
 // section colors (UI) live here so the manual and UI agree
-inline constexpr unsigned char kSecCol[kMaxSections][3] = { { 255, 120, 150 }, { 120, 200, 255 }, { 255, 196, 110 }, { 170, 140, 255 }, { 110, 230, 170 }, { 255, 150, 220 } };
+constexpr int kSecColors = 8;   // repeat after 8; neighbours always differ
+inline constexpr unsigned char kSecCol[kSecColors][3] = { { 255, 120, 150 }, { 120, 200, 255 }, { 255, 196, 110 }, { 170, 140, 255 }, { 110, 230, 170 }, { 255, 150, 220 }, { 140, 230, 240 }, { 230, 220, 120 } };
 
 // Where the sections start (sorted, fractions of the sample region) and the fade width at each boundary (fraction of the
 // shorter neighbour, centred on the line; 0 = hard cut, 1 = fades reach the middle of both neighbours).

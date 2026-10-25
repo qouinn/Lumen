@@ -27,6 +27,6 @@
 
 #define DISTRHO_PLUGIN_VST3_CATEGORIES "Instrument|Sampler"
 #define DISTRHO_PLUGIN_CLAP_FEATURES   "instrument", "sampler", "stereo"
-#define DISTRHO_PLUGIN_DESCRIPTION     "Sample effect instrument: load a sound and play it through 204 effect presets."
+#define DISTRHO_PLUGIN_DESCRIPTION     "Sample effect instrument: load a sound and play it through 219 effect presets."
 
 #endif

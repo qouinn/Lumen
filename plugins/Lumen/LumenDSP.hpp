@@ -469,13 +469,30 @@ inline double tailSeconds(const float* q, double bpm)
     return std::min(14.0, tail);
 }
 
+// Section edits handed from the editor thread to the audio thread without locking (a sequence lock: odd = being written)
+struct EditBox {
+    std::atomic<uint32_t> seq { 0 };
+    float ov[kMaxSections][kNumEdit];
+    EditBox() { for (auto& r : ov) for (float& v : r) v = kNoEdit; }
+    void write(const float (*src)[kNumEdit]) {
+        seq.fetch_add(1, std::memory_order_acq_rel);
+        std::memcpy(ov, src, sizeof ov);
+        seq.fetch_add(1, std::memory_order_acq_rel);
+    }
+};
+
 class LumenEngine {
 public:
     float p[kParamCount];
+    void setEditSource(const EditBox* b) { editSrc = b; editSeq = 0xFFFFFFFFu; }
+    void setEdits(const float (*src)[kNumEdit]) { std::memcpy(secOv, src, sizeof secOv); editsChanged = true; }   // offline renders / tests
+    void refreshSounds() { refreshReq.store(true); }   // own presets arrived (project load): look the sections' sounds up again
 
-    LumenEngine() : chains(kMaxSections) {
+    LumenEngine() : chains(kPool) {
         for (uint32_t i = 0; i < kParamCount; ++i) p[i] = getParamInfo(i).def;
-        for (int k = 0; k < kMaxSections; ++k) { lastSnd[k] = -1; ampS[k] = ampT[k] = 0; }
+        for (int k = 0; k < kMaxSections; ++k) { lastSnd[k] = -1; ampS[k] = ampT[k] = 0; secChain[k] = -1; }
+        for (int c = 0; c < kPool; ++c) owner[c] = -1;
+        for (auto& row : secOv) for (float& v : row) v = kNoEdit;
     }
 
     void setSampleRate(double rate) {
@@ -485,7 +502,7 @@ public:
     }
     void reset() {
         for (auto& v : voices) v.active = false;
-        for (auto& c : chains) c.reset();
+        releaseAllChains();
         for (int k = 0; k < kMaxSections; ++k) { ampS[k] = ampT[k] = 0; lastSnd[k] = -1; }
         playOn = false; internalBeat = 0; level = 0; gFirst = true; tlWas = false; posFrac = 0; killLeft = 0;
     }
@@ -526,7 +543,7 @@ public:
             while (mi < midiCount && midi[mi].frame <= i) { handleMidi(midi[mi]); ++mi; }
             if (killLeft > 0 && --killLeft == 0) {          // stop fade done: drop every voice and clear every buffer
                 for (auto& v : voices) if (v.order <= killOrder) v.active = false;   // a note played during the fade survives
-                for (auto& c : chains) c.reset();
+                releaseAllChains();
                 for (int k = 0; k < kMaxSections; ++k) ampS[k] = 0;
                 internalBeat = 0; actS = 0;
             }
@@ -547,14 +564,16 @@ public:
                 float wL = 0, wR = 0;
                 if (!tl) { wL = L; wR = R; chains[0].run(wL, wR, beat, bpm); }
                 else {
-                    // TIMELINE: every section has its own chain; the playhead position decides how much each one gets
+                    // TIMELINE: every section that can be heard borrows a chain from the pool; the playhead decides how much each one gets
                     const bool ring = (int)p[kTlTails] == 0;
+                    const int n = sectionCount(p);
                     for (int k = 0; k < kMaxSections; ++k) {
                         ampS[k] += (ampT[k] - ampS[k]) * ampA;
-                        Chain& c = chains[(size_t)k];
-                        const bool feeding = ampS[k] > 1e-4f;
-                        if (!feeding && (!ring || c.quiet > (int)(0.4f * sr))) { c.dirty = true; continue; }   // silent: skip it
-                        if (c.dirty) { c.reset(); c.control(secP[k]); }   // wake up with clean buffers
+                        const bool feeding = k < n && ampS[k] > 1e-4f;
+                        int ci = secChain[k];
+                        if (ci < 0) { if (!feeding) continue; ci = acquireChain(k); }
+                        Chain& c = chains[(size_t)ci];
+                        if (!feeding && (!ring || c.quiet > (int)(0.4f * sr) || k >= n)) { releaseChain(k); continue; }   // silent: give it back
                         float l = L, r = R;
                         if (ring) { l *= ampS[k]; r *= ampS[k]; }   // fade what goes IN: echoes and reverb die out naturally
                         c.run(l, r, beat, bpm);
@@ -597,8 +616,20 @@ private:
     float sr = 44100; double bpm = 120, internalBeat = 0;
     int ctl = 0; bool playOn = false, gFirst = true, tl = false, tlWas = false;
     float outG = 1, gainSm = 1, dwS = 1, level = 0, outPos = 0, posFrac = 0, ampA = 0.004f;
+    static constexpr int kPool = 8;          // effect chains shared by the timeline sections (only audible ones need one)
     std::vector<Chain> chains;
-    float secP[kMaxSections][kParamCount];   // each section's settings (its sound + its macros)
+    int secChain[kMaxSections], owner[kPool];
+    float secP[kMaxSections][kParamCount];   // each section's settings (its sound + its edits + its macros)
+    float secOv[kMaxSections][kNumEdit];     // the edits (kNoEdit = keep the sound's value)
+    const EditBox* editSrc = nullptr; uint32_t editSeq = 0xFFFFFFFFu; bool editsChanged = true; std::atomic<bool> refreshReq { false };
+    void pullEdits() {
+        if (!editSrc) return;
+        const uint32_t a = editSrc->seq.load(std::memory_order_acquire);
+        if (a == editSeq || (a & 1u)) return;
+        std::memcpy(secOv, editSrc->ov, sizeof secOv);
+        if (editSrc->seq.load(std::memory_order_acquire) != a) return;   // changed while copying: try again next tick
+        editSeq = a; editsChanged = true;
+    }
     int lastSnd[kMaxSections];
     float ampS[kMaxSections], ampT[kMaxSections];
     float actS = 0, actUp = 0.01f, actDown = 1e-5f;
@@ -610,10 +641,12 @@ private:
     void control() {
         tl = p[kTlOn] > 0.5f && sectionCount(p) >= 2;
         if (tl != tlWas) {   // switching between the single sound and the timeline: start the chains fresh
-            for (auto& c : chains) c.reset();
+            releaseAllChains();
             for (int k = 0; k < kMaxSections; ++k) ampS[k] = 0;
             tlWas = tl;
         }
+        pullEdits();
+        if (refreshReq.exchange(false)) editsChanged = true;
         const float dwT = p[kDryWet], oT = std::pow(10.0f, p[kOut] / 20.0f);
         if (gFirst) { dwS = dwT; gFirst = false; } else dwS += (dwT - dwS) * 0.3f;
         outG = oT;
@@ -623,7 +656,7 @@ private:
         const Voice* best = nullptr;
         for (auto& v : voices) if (v.active && (!best || v.order > best->order)) best = &v;
         if (best && sample && !sample->empty()) { double a, b; regionFrames(a, b); posFrac = (float)clampf((float)((best->pos - a) / (b - a)), 0.0f, 1.0f); }
-        if (!tl) { chains[0].control(p); curSec = 0; return; }
+        if (!tl) { chains[0].control(p); curSec = 0; editsChanged = false; return; }
         const int n = sectionCount(p);
         float amp[kMaxSections];
         sectionWeights(p, posFrac, amp);
@@ -633,10 +666,36 @@ private:
             if (ampT[k] > bestA) { bestA = ampT[k]; curSec = k; }
             if (k >= n) continue;
             const int snd = (int)p[slotParam(k, kSfSound)];
-            if (snd != lastSnd[k]) { presetValues(snd, secP[k]); lastSnd[k] = snd; }
+            if (snd != lastSnd[k] || editsChanged) { sectionValues(snd, secOv[k], secP[k]); lastSnd[k] = snd; }
             for (int m = 0; m < 4; ++m) secP[k][kM1 + m] = p[slotParam(k, kSfM1 + m)];
-            chains[(size_t)k].control(secP[k]);
+            if (secChain[k] >= 0) chains[(size_t)secChain[k]].control(secP[k]);
         }
+        editsChanged = false;
+    }
+
+    // ---- chain pool: kPool chains shared by up to kMaxSections sections
+    int acquireChain(int k) {
+        int best = -1; float bestEnv = 1e9f;
+        for (int c = 0; c < kPool; ++c) if (owner[c] < 0) { best = c; break; }
+        if (best < 0)   // all busy: take the quietest one that is only ringing out (or, failing that, the quietest)
+            for (int pass = 0; pass < 2 && best < 0; ++pass)
+                for (int c = 0; c < kPool; ++c) {
+                    const int o = owner[c];
+                    if (pass == 0 && ampS[o] > 1e-4f) continue;
+                    if (chains[(size_t)c].env < bestEnv) { bestEnv = chains[(size_t)c].env; best = c; }
+                }
+        if (owner[best] >= 0) secChain[owner[best]] = -1;
+        owner[best] = k; secChain[k] = best;
+        Chain& c = chains[(size_t)best];
+        c.reset(); c.first = true; c.quiet = 0; c.env = 0; c.act = actS;
+        c.control(secP[k]);
+        return best;
+    }
+    void releaseChain(int k) { const int c = secChain[k]; if (c >= 0) { owner[c] = -1; secChain[k] = -1; } }
+    void releaseAllChains() {
+        for (auto& c : chains) c.reset();
+        for (int c = 0; c < kPool; ++c) owner[c] = -1;
+        for (int k = 0; k < kMaxSections; ++k) secChain[k] = -1;
     }
 
     // ---- player
@@ -699,9 +758,11 @@ private:
 // ---------------------------------------------------------------------------------------------
 // Offline render (drag to DAW): the sample played `passes` times through the current sound, plus the tail.
 inline void renderLumenOffline(const float* params, const SampleData& s, double sr, double bpm, int passes,
-                               std::vector<float>& L, std::vector<float>& R)
+                               std::vector<float>& L, std::vector<float>& R, const float (*edits)[kNumEdit] = nullptr,
+                               std::atomic<float>* progress = nullptr, const std::atomic<bool>* cancel = nullptr)
 {
     LumenEngine* e = new LumenEngine();
+    if (edits) e->setEdits(edits);
     for (uint32_t i = 0; i < kNumIn; ++i) e->p[i] = params[i];
     e->p[kPlay] = 1.0f; e->p[kPlayFrom] = 0.0f;
     if (passes <= 1) e->p[kLoop] = 0.0f;
@@ -714,7 +775,7 @@ inline void renderLumenOffline(const float* params, const SampleData& s, double 
         float q[kParamCount];
         if (params[kTlOn] > 0.5f && sectionCount(params) >= 2) {
             const int k = sectionCount(params) - 1;   // the last section rings out
-            float sp[kParamCount]; presetValues((int)params[slotParam(k, kSfSound)], sp);
+            float sp[kParamCount]; sectionValues((int)params[slotParam(k, kSfSound)], edits ? edits[k] : nullptr, sp);
             for (int m = 0; m < 4; ++m) sp[kM1 + m] = params[slotParam(k, kSfM1 + m)];
             applyMacros(sp, q);
         } else applyMacros(params, q);
@@ -731,7 +792,12 @@ inline void renderLumenOffline(const float* params, const SampleData& s, double 
         e->process(&L[pos], &R[pos], n, nullptr, 0, ti);
         ti.ppq += n * bpm / 60.0 / sr;
         pos += n;
+        if ((pos & 0x3FFF) < 256) {
+            if (progress) progress->store((float)pos / (float)total);
+            if (cancel && cancel->load()) { L.clear(); R.clear(); break; }
+        }
     }
+    if (progress) progress->store(1.0f);
     delete e;
 }
 
