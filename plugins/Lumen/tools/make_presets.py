@@ -727,6 +727,54 @@ preset(C, 'Signal Lost', 'A transmission breaking up: crushed to 3 bits, buzzing
        M(lofi(3, 7000, 0, 0.3, 0.35, 0.1, 0.5), mod(3, 30.0, 0.7, 0, 1.0)),
        [('LOSS', [('l_bits', 10, 2)]), ('NOISE', [('l_noise', 0.0, 1.0)]), ('BUZZ', [('m_depth', 0.0, 1.0)]), ('RATE', [('l_rate', 20000, 1500)])])
 
+# ---- 12 BEAUTIFUL TRANSFORMS (1.3): the sample becomes something else, gently
+C = 12
+preset(C, 'Angel Choir', 'The sample sung by a soft choir an octave and a twelfth above, breathing between "aah" and "ooh".',
+       M(grn(0.8, 380, 18, 12, 0.35, 0.05, 0.1), pit(7, 19, 0.3, 0.2, 0.7), filt(2, 1100, 0.3, 0.1, 0.35), rev(0.55, 0.95, 9.0, 0.45, 0.35, 0.5)),
+       [('CHOIR', [('g_mix', 0.2, 1.0)]), ('HARMONY', [('p_mix_a', 0.0, 0.7), ('p_mix_b', 0.0, 0.5)]), ('BREATH', [('f_depth', 0.0, 0.8)]), ('HEAVEN', [('r_mix', 0.2, 0.85), ('r_shim', 0.0, 0.6)])])
+preset(C, 'String Section', 'Long overlapping grains with a gentle vibrato: the sample played by a warm string ensemble.',
+       M(grn(0.9, 260, 30, 0, 0.25, 0.0, 0.04), mod(6, 5.5, 0.12, 0, 1.0), drv(4, 0.15, 0.45, 0.5), lp(6500, 0.1), rev(0.4, 0.8, 4.0, 0.5)),
+       [('BOW', [('g_mix', 0.3, 1.0)]), ('VIBRATO', [('m_depth', 0.0, 0.4)]), ('WARMTH', [('d_amt', 0.0, 0.6), ('f_cut', 12000, 3000)]), ('HALL', [('r_mix', 0.1, 0.8)])])
+preset(C, 'Wind Chimes', 'Tiny bright pieces two octaves up, ringing out one by one in the open air.',
+       M(grn(0.9, 70, 8, 24, 1.0, 0.0, 0.25), filt(1, 500, 0.15), dly(4, 0.4, 0.25, 1, 0.9, 0.05), rev(0.5, 0.8, 6.5, 0.15, 0.1, 0.4)),
+       [('CHIMES', [('g_dens', 3, 18)]), ('BREEZE', [('g_jit', 0.0, 0.8)]), ('AIR', [('r_mix', 0.2, 0.85)]), ('MIX', [('g_mix', 0.3, 1.0)])])
+preset(C, 'Felt Piano', 'Soft, close and intimate: like a piano with felt on the hammers, recorded late at night.',
+       M(lp(1700, 0.12), drv(4, 0.2, 0.35, 0.5), lofi(16, 48000, 0.06, 0.03, 0.05), rev(0.25, 0.25, 0.9, 0.6, 0.0, 0.1, 5)),
+       [('FELT', [('f_cut', 5000, 700)]), ('WARMTH', [('d_amt', 0.0, 0.6)]), ('ROOM', [('r_mix', 0.0, 0.6)]), ('HISS', [('l_noise', 0.0, 0.35)])], (0.5, 0.5, 0.4, 0.4))
+preset(C, 'Stardust Echoes', 'A glittering octave rides on dotted ping-pong echoes that float up into a shimmering sky.',
+       M(pit(12, 0, 0.3, 0.0, 1.0), dly(4, 0.6, 0.4, 1, 0.9, 0.2), rev(0.45, 0.85, 7.0, 0.3, 0.5, 0.4)),
+       [('STARDUST', [('p_mix_a', 0.0, 0.8)]), ('ECHOES', [('y_fb', 0.2, 0.8), ('y_mix', 0.1, 0.6)]), ('SKY', [('r_shim', 0.0, 0.8)]), ('SPACE', [('r_mix', 0.1, 0.8)])])
+preset(C, 'Lantern Glow', 'Warm and floating: a soft octave below, a slowly turning phaser and dark, gentle echoes.',
+       M(pit(-12, 0, 0.3, 0.0, 1.0), mod(2, 0.05, 0.6, 0.35, 0.5), lp(3200, 0.1), dly(6, 0.45, 0.25, 1, 0.3, 0.15), rev(0.45, 0.8, 6.0, 0.55)),
+       [('WARMTH', [('p_mix_a', 0.0, 0.7)]), ('FLOAT', [('m_mix', 0.0, 0.9)]), ('ECHOES', [('y_mix', 0.0, 0.55)]), ('GLOW', [('f_cut', 1200, 9000)])])
+preset(C, 'Crystal Bells', 'A delicate bell shimmer two octaves up, with soft metallic overtones and bright echoes.',
+       M(mod(5, 9.0, 1.0, 0, 0.22), filt(1, 500, 0.1), pit(24, 12, 0.25, 0.15, 1.0), dly(3, 0.45, 0.25, 1, 0.95, 0.0), rev(0.45, 0.7, 5.5, 0.1, 0.1, 0.3)),
+       [('BELLS', [('m_mix', 0.0, 0.5)]), ('SPARKLE', [('p_mix_a', 0.0, 0.7)]), ('ECHOES', [('y_mix', 0.0, 0.6)]), ('SPACE', [('r_mix', 0.1, 0.8)])])
+preset(C, 'Harp Ripples', 'Every note rolls into quick repeats a fifth and an octave up, like fingers running over harp strings.',
+       M(stut(0, 4, 0.35), pit(7, 12, 0.35, 0.3, 1.0), dly(2, 0.5, 0.3, 1, 0.85, 0.05), rev(0.35, 0.65, 3.5, 0.3)),
+       [('RIPPLE', [('s_amt', 0.0, 0.8)]), ('STRINGS', [('p_mix_a', 0.0, 0.8), ('p_mix_b', 0.0, 0.7)]), ('ECHOES', [('y_mix', 0.0, 0.6)]), SPACE])
+preset(C, 'Pastel Clouds', 'Huge, soft clouds of the sample drifting slowly, with dark half-note echoes underneath.',
+       M(grn(0.85, 700, 6, 0, 0.9, 0.3, 0.06), lp(4000, 0.1), dly(7, 0.5, 0.25, 1, 0.25, 0.3), rev(0.5, 0.9, 7.0, 0.6)),
+       [('CLOUDS', [('g_mix', 0.2, 1.0), ('g_size', 250, 800)]), ('SOFT', [('f_cut', 9000, 1500)]), ('DRIFT', [('y_mix', 0.0, 0.5)]), SPACE])
+preset(C, 'Shooting Stars', 'Short bright streaks leaping up through the octaves and trailing away in bouncing echoes.',
+       M(grn(0.7, 30, 6, 12, 0.6, 0.0, 0.9), dly(2, 0.55, 0.35, 1, 0.9, 0.1), rev(0.45, 0.75, 5.0, 0.2, 0.3, 0.4)),
+       [('STARS', [('g_dens', 2, 20)]), ('LEAP', [('g_jit', 0.3, 1.0)]), ('TRAILS', [('y_fb', 0.2, 0.8)]), GLOW])
+preset(C, 'Sunrise', 'The sound slowly brightens like the first light of the day, with a warm octave glow above it.',
+       M(filt(0, 1500, 0.2, 0.03, 0.7), pit(12, 0, 0.2, 0.0, 1.0), drv(4, 0.15, 0.6, 0.5), rev(0.45, 0.85, 6.0, 0.3, 0.45, 0.3)),
+       [('DAWN', [('f_cut', 400, 6000)]), ('SPEED', [('f_rate', 0.01, 0.2)]), ('GLOW', [('p_mix_a', 0.0, 0.6), ('r_shim', 0.0, 0.7)]), SPACE])
+preset(C, 'Prism', 'Light through glass: an octave and a twelfth above, slowly turning in a gentle flanger.',
+       M(pit(12, 19, 0.35, 0.25, 1.0), mod(1, 0.08, 0.6, 0.55, 0.5), filt(1, 250, 0.1), rev(0.4, 0.75, 4.5, 0.3, 0.2)),
+       [('COLORS', [('p_mix_a', 0.0, 0.8), ('p_mix_b', 0.0, 0.6)]), ('TURN', [('m_mix', 0.0, 0.9), ('m_rate', 0.02, 0.5)]), ('LIGHT', [('f_cut', 30, 1500)]), SPACE])
+preset(C, 'Satin Echoes', 'Soft, rounded echoes that sway a little, wrapped in a silky chorus.',
+       M(dly(6, 0.55, 0.35, 1, 0.35, 0.35), mod(0, 0.4, 0.6, 0.15, 0.45), lp(7500, 0.1), rev(0.25, 0.6, 2.5, 0.6)),
+       [('ECHOES', [('y_mix', 0.0, 0.7)]), ('REPEATS', [('y_fb', 0.2, 0.85)]), ('SILK', [('m_mix', 0.0, 0.9)]), ('SWAY', [('y_mod', 0.0, 0.8)])])
+preset(C, 'Vibraphone', 'A soft, round vibraphone: a gentle pulse, a bell-like octave and a warm room.',
+       M(mod(3, 5.5, 0.35, 0, 1.0), pit(12, 0, 0.25, 0.0, 1.0), filt(2, 1800, 0.15), rev(0.3, 0.5, 2.2, 0.5)),
+       [('MOTOR', [('m_depth', 0.0, 0.7)]), ('SPEED', [('m_rate', 1.0, 9.0)]), ('BELL', [('p_mix_a', 0.0, 0.6)]), ('ROOM', [('r_mix', 0.0, 0.7)])])
+preset(C, 'Glass Harmonica', 'The sample played on singing wine glasses: pure, airy and slowly blooming.',
+       M(filt(2, 1400, 0.22, 0.15, 0.2), grn(0.7, 500, 14, 12, 0.3, 0.0, 0.05), drv(4, 0.35, 0.7, 0.8), mod(0, 0.15, 0.5, 0.1, 0.4), rev(0.45, 0.85, 7.5, 0.2, 0.15, 0.4)),
+       [('GLASS', [('f_res', 0.1, 0.5)]), ('BLOOM', [('g_mix', 0.0, 1.0)]), ('SHINE', [('f_cut', 700, 3000)]), SPACE])
+
 # =============================================================================================
 def fmt(v):
     s = repr(float(v))
@@ -762,6 +810,6 @@ def main():
     out.append('')
     out.append('} // namespace lm')
     open(os.path.join(HERE, '..', 'LumenPresets.hpp'), 'w').write('\n'.join(out) + '\n')
-    print('presets:', len(P), ' per category:', [sum(1 for p in P if p['cat'] == c) for c in range(12)])
+    print('presets:', len(P), ' per category:', [sum(1 for p in P if p['cat'] == c) for c in range(13)])
 
 main()
