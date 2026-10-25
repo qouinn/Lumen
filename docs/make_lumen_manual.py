@@ -25,19 +25,19 @@ def table(rows, widths, style=B):
                            ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6)]))
     return t
 
-story = [Paragraph("Lumen", TITLE), Paragraph("Sample effect instrument &mdash; user manual, version 1.2.1", S), Spacer(1, 4 * mm),
+story = [Paragraph("Lumen", TITLE), Paragraph("Sample effect instrument &mdash; user manual, version 1.3", S), Spacer(1, 4 * mm),
          Image(shot, width=165 * mm, height=165 * mm * 760 / 1100), Spacer(1, 3 * mm)]
 
 story += [Paragraph("What it is", H2), P(
-    "Lumen plays your sample through <b>204 effect sounds in 12 categories</b>: "
-    "granular clouds, shimmering spaces, pads, rhythmic glitches, tape and lo-fi, pitch and harmony, filter motion and drive &mdash; and, new in 1.2, "
-    "<b>Breakcore &amp; Chaos</b>, <b>Dreamy &amp; Nostalgic</b>, <b>Cinematic &amp; Dark</b> and <b>Sci-Fi &amp; Experimental</b>. "
+    "Lumen plays your sample through <b>219 effect sounds in 13 categories</b>, plus your own: "
+    "granular clouds, shimmering spaces, pads, rhythmic glitches, tape and lo-fi, pitch and harmony, filter motion and drive, breakcore, dreamy, cinematic and sci-fi sounds &mdash; and, new in 1.3, <b>Beautiful Transforms</b>: "
+    "sounds that turn the sample into a choir, strings, glass, bells or wind chimes. "
     "Pick a sound, turn the four big knobs, and drag the result straight into FL Studio. "
     "It is an instrument (it shows up in your instrument list, not under effects). VST3 and CLAP for Windows 10/11 (64-bit). "
     "Loads WAV, AIFF, FLAC and MP3.")]
 
 story += [Paragraph("Install", H2), P(
-    "Run <b>Lumen-1.2.1-Windows-Setup.exe</b> (installing over any older Lumen is fine, and your projects keep their sounds; close your DAW first). It installs Lumen.vst3 to <font face='Courier'>C:\\Program Files\\Common Files\\VST3</font>, "
+    "Run <b>Lumen-1.3-Windows-Setup.exe</b> (installing over any older Lumen is fine, and your projects keep their sounds; close your DAW first). It installs Lumen.vst3 to <font face='Courier'>C:\\Program Files\\Common Files\\VST3</font>, "
     "Lumen.clap to <font face='Courier'>...\\Common Files\\CLAP</font> and this manual to <font face='Courier'>C:\\Program Files\\Lumen</font>. "
     "<b>FL Studio:</b> Options &rarr; Manage plugins &rarr; <i>Find installed plugins</i>; Lumen appears with the instruments (Generators). "
     "SmartScreen may warn because the installer isn't code-signed: <i>More info</i> &rarr; <i>Run anyway</i>.")]
@@ -60,8 +60,13 @@ story += [Paragraph("The main screen", H2), table([
     ["Play / STOP", "Plays the sample from the start. With LOOP OFF it plays once and the button pops out at the end. "
              "While anything can be heard (Play, MIDI keys, or echoes and reverb still ringing) the button shows a square: <b>STOP</b> cuts everything "
              "to silence at once (with a 10 ms fade so it doesn't click)."],
-    ["DRAG TO DAW", "Press and drag into FL Studio: renders the sample through the current sound (plus the reverb/echo tail) to a 24-bit WAV. "
-                    "A plain click saves it and opens the folder <font face='Courier'>Documents\\Grainfield Renders</font>."],
+    ["DRAG TO DAW", "Press and drag into FL Studio: you get the sample through the current sound (plus the reverb/echo tail) as a 24-bit WAV. "
+                    "It is rendered in the background as soon as your mouse reaches the tile (a small bar shows the progress, then <i>ready to drag</i>), "
+                    "so the plugin never freezes. A plain click saves it and opens the folder <font face='Courier'>Documents\\Grainfield Renders</font>."],
+    ["SAVE AS OWN PRESET", "Appears at the top right as soon as you change a sound (its knobs, or anything on the EDIT page). Type a name and "
+                           "press Enter: the sound goes into <b>OWN PRESETS</b>, the last category, in every project. They are kept in "
+                           "<font face='Courier'>Documents\\Lumen\\Own Presets.txt</font> (copy that file to take them to another computer); "
+                           "projects also keep a copy of the ones they use. Right-click an own preset twice to remove it."],
     ["LEN 1\u00d7 / 2\u00d7 / 4\u00d7", "How many times the sample plays in the render (for looping sounds and rhythmic effects)."],
     ["Waveform", "<b>Click</b> anywhere between the handles to play from that spot (click again somewhere else to jump there). "
                  "<b>Right-click</b> moves the nearest start or end handle to that spot. You can also drag the two triangle handles; "
@@ -69,7 +74,7 @@ story += [Paragraph("The main screen", H2), table([
     ["LOOP", "On: the sample repeats (with a tiny crossfade so the loop doesn't click). Off: it plays once."],
     ["KEYS", "MIDI keys also play the sample. <b>PITCH</b>: like a sampler, C3 = original, other keys transpose. <b>TRIGGER</b>: every key "
              "plays it at the original pitch."],
-    ["Categories / sounds", "Twelve categories (15 to 18 sounds each), or ALL SOUNDS (scroll with the wheel). A dot marks the category of the current sound."],
+    ["Categories / sounds", "Thirteen categories (15 to 18 sounds each), OWN PRESETS, or ALL SOUNDS (scroll with the wheel). A dot marks the category of the current sound."],
     ["Four big knobs", "Each sound gives you four macros that change several settings at once. Double-click or right-click resets a knob to the sound's default."],
     ["DRY / WET, OUTPUT", "Blend dry/effect, and the overall volume. All sounds are level-matched so switching doesn't jump in loudness."],
     ["Chain (bottom row)", "The nine effect modules in signal order. Lit = on. Click one to switch it on or off."],
@@ -99,7 +104,7 @@ story += [table([
 
 story += [CondPageBreak(110 * mm), Paragraph("TIMELINE: fade from one sound to the next", H2), P(
     "The <b>TIMELINE</b> tab lets the sound change while the sample plays: sound A at the start, B in the middle, C at the end, each one "
-    "fading smoothly into the next. Up to six sounds."),
+    "fading smoothly into the next. Up to 32 sounds."),
     Image(shot3, width=165 * mm, height=165 * mm * 760 / 1100), Spacer(1, 2 * mm), P(
     "<b>In four clicks:</b> open TIMELINE (it starts with your current sound as section 1) &rarr; <b>double-click</b> in the waveform where "
     "sound B should start &rarr; click B in the list below &rarr; double-click where C should start and click C. Press Play: A fades into B, "
@@ -117,12 +122,14 @@ story += [CondPageBreak(110 * mm), Paragraph("TIMELINE: fade from one sound to t
     ["CURVE", "<b>SMOOTH</b>: gentle, constant loudness. <b>LINEAR</b>: a straight blend. <b>SHARP</b>: the change happens quickly in the middle of the fade."],
     ["TAILS", "<b>RING</b>: echoes and reverb of the old sound die out naturally over the new one. <b>CUT</b>: the old sound stops with its fade."],
     ["Four knobs", "Shape the selected section only (each section remembers its own settings)."],
+    ["EDIT", "With the timeline on, the EDIT tab changes the <b>selected section's</b> sound only (its name gets a *). "
+             "Double-click a knob to go back to the sound's own value. SAVE AS OWN PRESET keeps the result."],
+    ["+ ADD SOUND", "Splits the longest section in the middle (up to 32 sections)."],
     ["ON", "Switches the timeline off to hear the single sound again, and back on. Your sections are kept."],
 ], [30 * mm, 140 * mm]), P(
     "The timeline follows the sample: with LOOP on it starts again at section 1 on every pass, MIDI keys play it too, and DRAG TO DAW renders "
     "it with all the fades. It is saved with your project and stays when you browse sounds. While it is on, clicking a sound on the SOUNDS page "
-    "gives it to the selected section, and the header arrows and SURPRISE change that section's sound. EDIT changes only the single sound, so "
-    "switch the timeline off to use it.")]
+    "gives it to the selected section, and the header arrows and SURPRISE change that section's sound.")]
 
 story += [Paragraph("Tempo", H2), P(
     "STUTTER and DELAY follow FL Studio's tempo. While the song plays they lock to the song position; when it is stopped they count from "
@@ -136,9 +143,9 @@ story += [Paragraph("Tips and troubleshooting", H2), P(
 
 # ---- all sounds
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'plugins', 'Lumen', 'LumenPresets.hpp')).read()
-cats = ["Granular", "Shimmer & Space", "Pads & Textures", "Rhythm & Glitch", "Lo-Fi & Tape", "Pitch & Harmony", "Filter & Motion", "Drive & Character", "Breakcore & Chaos", "Dreamy & Nostalgic", "Cinematic & Dark", "Sci-Fi & Experimental"]
+cats = ["Granular", "Shimmer & Space", "Pads & Textures", "Rhythm & Glitch", "Lo-Fi & Tape", "Pitch & Harmony", "Filter & Motion", "Drive & Character", "Breakcore & Chaos", "Dreamy & Nostalgic", "Cinematic & Dark", "Sci-Fi & Experimental", "Beautiful Transforms"]
 items = re.findall(r'\{ "((?:[^"\\]|\\.)*)", (\d+), "((?:[^"\\]|\\.)*)", kPV', src)
-story += [CondPageBreak(60 * mm), Paragraph("All 204 sounds", H2)]
+story += [CondPageBreak(60 * mm), Paragraph("All 219 sounds", H2)]
 for c, cname in enumerate(cats):
     rows = [["Sound", "What it is"]] + [[n, d.replace('\\"', '"')] for n, cc, d in items if int(cc) == c]
     story += [CondPageBreak(40 * mm), Paragraph(cname, H3), table(rows, [42 * mm, 128 * mm], S)]
@@ -149,7 +156,7 @@ story += [Paragraph("Credits", H2), Paragraph(
 
 def bg(c, d):
     c.saveState(); c.setFillColor(ACC); c.rect(0, A4[1] - 6, A4[0], 6, stroke=0, fill=1)
-    c.setFont("Helvetica", 8); c.setFillColor(DIM); c.drawRightString(A4[0] - 20 * mm, 10 * mm, "Lumen 1.2.1  \u00b7  page %d" % d.page); c.restoreState()
+    c.setFont("Helvetica", 8); c.setFillColor(DIM); c.drawRightString(A4[0] - 20 * mm, 10 * mm, "Lumen 1.3  \u00b7  page %d" % d.page); c.restoreState()
 
 SimpleDocTemplate(out, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=15 * mm, bottomMargin=15 * mm,
                   title="Lumen Manual", author="Grainfield Audio").build(story, onFirstPage=bg, onLaterPages=bg)
