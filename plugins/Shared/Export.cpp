@@ -83,6 +83,61 @@ bool writeWav24(const std::string& path, const std::vector<float>& L, const std:
     return ok;
 }
 
+std::string documentsFolder(const char* name)
+{
+#ifdef _WIN32
+    wchar_t docs[MAX_PATH] = { 0 };
+    std::wstring dir;
+    if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PERSONAL | CSIDL_FLAG_CREATE, nullptr, 0, docs))) dir = std::wstring(docs) + L"\\" + widen(name);
+    else { wchar_t tmp[MAX_PATH] = { 0 }; GetTempPathW(MAX_PATH, tmp); dir = std::wstring(tmp) + widen(name); }
+    CreateDirectoryW(dir.c_str(), nullptr);
+    return narrow(dir.c_str());
+#else
+    const char* home = std::getenv("HOME");
+    std::string base = home ? home : "/tmp";
+    std::string docs = base + "/Documents";
+    struct stat st;
+    if (stat(docs.c_str(), &st) != 0) docs = base;
+    std::string dir = docs + "/" + name;
+    mkdir(dir.c_str(), 0755);
+    return dir;
+#endif
+}
+
+static std::FILE* openUtf8(const std::string& path, const char* mode)
+{
+#ifdef _WIN32
+    return _wfopen(widen(path).c_str(), widen(mode).c_str());
+#else
+    return std::fopen(path.c_str(), mode);
+#endif
+}
+
+bool readTextFile(const std::string& utf8Path, std::string& out)
+{
+    out.clear();
+    std::FILE* f = openUtf8(utf8Path, "rb");
+    if (!f) return false;
+    char buf[4096]; size_t n;
+    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) out.append(buf, n);
+    std::fclose(f);
+    return true;
+}
+
+bool writeTextFile(const std::string& utf8Path, const std::string& text)
+{
+    const std::string tmp = utf8Path + ".tmp";
+    std::FILE* f = openUtf8(tmp, "wb");
+    if (!f) return false;
+    const bool ok = std::fwrite(text.data(), 1, text.size(), f) == text.size();
+    if (std::fclose(f) != 0 || !ok) return false;
+#ifdef _WIN32
+    return MoveFileExW(widen(tmp).c_str(), widen(utf8Path).c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
+#else
+    return std::rename(tmp.c_str(), utf8Path.c_str()) == 0;
+#endif
+}
+
 std::string rendersFolder()
 {
 #ifdef _WIN32

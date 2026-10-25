@@ -13,6 +13,13 @@ bool writeWav24(const std::string& utf8Path, const std::vector<float>& L, const 
 // Documents/Grainfield Renders (created if needed). UTF-8.
 std::string rendersFolder();
 
+// Documents/<name> (created if needed). UTF-8.
+std::string documentsFolder(const char* name);
+
+// Whole-file text read / write with UTF-8 paths (write goes through a temporary file, so a crash never leaves half a file).
+bool readTextFile(const std::string& utf8Path, std::string& out);
+bool writeTextFile(const std::string& utf8Path, const std::string& text);
+
 // Starts an OS drag of the file (blocking until dropped or cancelled).
 // Must be called while the left mouse button is held. Returns false if unsupported / failed.
 bool dragFileOut(const std::string& utf8Path);
