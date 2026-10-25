@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the Windows installer: manual + licences into dist/payload-lumen, then NSIS.
-#   ./build.sh windows && installer/make_installer.sh   -> dist/Lumen-1.2.1-Windows-Setup.exe
+#   ./build.sh windows && installer/make_installer.sh   -> dist/Lumen-1.3-Windows-Setup.exe
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 P="$ROOT/dist/payload-lumen"
