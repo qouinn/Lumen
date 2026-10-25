@@ -1,0 +1,44 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies (DPF + dr_libs, pinned)
+        run: bash deps.sh
+      - name: Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-mingw-w64-x86-64-posix nsis python3-reportlab \
+            libgl-dev libx11-dev libxcursor-dev libxext-dev libxrandr-dev
+      - name: Engine tests (all 204 sounds, level matching, duplicate check, timeline)
+        run: |
+          mkdir -p build/out
+          g++ -std=gnu++17 -O2 -Iplugins/Shared -Iplugins/Lumen -Idpf/distrho plugins/Lumen/tests/test_lumen.cpp plugins/Shared/Export.cpp -o build/test_lumen
+          build/test_lumen build/out
+      - name: Build Linux
+        run: bash build.sh linux
+      - name: Build Windows + installer
+        run: |
+          bash build.sh windows
+          bash installer/make_installer.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lumen-Windows
+          path: dist/Lumen-*-Windows-Setup.exe
+      - name: Attach installer to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${GITHUB_REF_NAME}" dist/Lumen-*-Windows-Setup.exe dist/payload-lumen/Lumen-Manual.pdf --clobber || gh release create "${GITHUB_REF_NAME}" dist/Lumen-*-Windows-Setup.exe dist/payload-lumen/Lumen-Manual.pdf --generate-notes
