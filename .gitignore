@@ -1,0 +1,7 @@
+bin/
+build/
+dist/
+__pycache__/
+*.o
+dpf/
+plugins/Shared/ext/drlibs/
