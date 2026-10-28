@@ -77,6 +77,10 @@ int main(int argc, char** argv)
 
     HMODULE lib = LoadLibraryA(argv[1]);
     if (!lib) { fprintf(rep, "LOADFAIL\n"); fclose(rep); return 1; }
+    if (getenv("GFH_DPIAWARE")) {   // act like a per-monitor DPI-aware host (FL Studio is one)
+        typedef BOOL(WINAPI* PSet)(HANDLE);
+        if (PSet f = (PSet)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext")) f((HANDLE)-4);
+    }
     auto entry = (const clap_plugin_entry_t*)GetProcAddress(lib, "clap_entry");
     entry->init(argv[1]);
     auto factory = (const clap_plugin_factory_t*)entry->get_factory(CLAP_PLUGIN_FACTORY_ID);
@@ -95,11 +99,12 @@ int main(int argc, char** argv)
     const HRESULT rr = RegisterDragDrop(drop, tgt);
 
     gui->create(plug, CLAP_WINDOW_API_WIN32, false);
+    if (const char* hs = getenv("GFH_SETSCALE")) gui->set_scale(plug, atof(hs));   // the host announces a display scale
     clap_window_t cw = {}; cw.api = CLAP_WINDOW_API_WIN32; cw.win32 = gParent;
     gui->set_parent(plug, &cw);
     gui->show(plug);
     uint32_t w = 0, h = 0; gui->get_size(plug, &w, &h);
-    if (const char* sc = getenv("GFH_HOSTSCALE")) {   // host resizes the editor, like dragging FL's window edge
+    if (const char* sc = getenv("GFH_HOSTSCALE"); sc && atof(sc) > 0) {   // host resizes the editor, like dragging FL's window edge
         const double f = atof(sc);
         uint32_t rw = (uint32_t)(w * f), rh = (uint32_t)(h * f);
         gui->adjust_size(plug, &rw, &rh);
