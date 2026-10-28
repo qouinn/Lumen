@@ -33,4 +33,11 @@ bool canDragFiles();
 // Gives keyboard focus back to the host window that embeds the plugin (after typing in a text field).
 void returnKeyboardFocus(uintptr_t pluginWindow);
 
+// The display scale the plugin window really has (Windows: its own DPI, 1.0 when Windows stretches a DPI-unaware window
+// itself). Returns 0 when it can't be told (other systems) - then use the host's scale.
+double windowDpiScale(uintptr_t pluginWindow);
+
+// Usable screen area (without the taskbar) of the monitor the window is on, in the window's own pixels. False if unknown.
+bool screenWorkArea(uintptr_t pluginWindow, int& width, int& height);
+
 } // namespace gf

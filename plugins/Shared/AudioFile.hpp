@@ -1,4 +1,5 @@
-// Grainfield — audio file loading (WAV, AIFF, FLAC, MP3)
+// Grainfield / Flock / Lumen — audio file loading: WAV, AIFF, FLAC, MP3, Ogg Vorbis built in; M4A/AAC, ALAC, WMA, Opus
+// and the audio track of videos (MP4, MOV, MKV, WebM, AVI, WMV, …) through Windows Media Foundation (ffmpeg elsewhere)
 #pragma once
 
 #include "GrainEngine.hpp"

@@ -263,6 +263,33 @@ void returnKeyboardFocus(uintptr_t pluginWindow)
     if (h != nullptr && GetFocus() == h) { HWND p = GetParent(h); if (p != nullptr) SetFocus(p); }
 }
 
+double windowDpiScale(uintptr_t pluginWindow)
+{
+    HWND h = (HWND)pluginWindow;
+    if (h == nullptr) return 0.0;
+    typedef UINT(WINAPI* PGetDpiForWindow)(HWND);
+#if defined(__GNUC__)
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wcast-function-type"
+#endif
+    static const PGetDpiForWindow getDpi = (PGetDpiForWindow)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow");
+#if defined(__GNUC__)
+# pragma GCC diagnostic pop
+#endif
+    UINT dpi = getDpi ? getDpi(h) : 0;   // Windows 10 1607+: the DPI this window is really drawn at
+    if (dpi == 0) { HDC dc = GetDC(h); if (dc) { dpi = (UINT)GetDeviceCaps(dc, LOGPIXELSX); ReleaseDC(h, dc); } }
+    return dpi >= 48 ? dpi / 96.0 : 0.0;
+}
+
+bool screenWorkArea(uintptr_t pluginWindow, int& width, int& height)
+{
+    HMONITOR mon = MonitorFromWindow(pluginWindow ? (HWND)pluginWindow : GetDesktopWindow(), MONITOR_DEFAULTTOPRIMARY);
+    MONITORINFO mi; mi.cbSize = sizeof mi;
+    if (!mon || !GetMonitorInfoW(mon, &mi)) return false;
+    width = mi.rcWork.right - mi.rcWork.left; height = mi.rcWork.bottom - mi.rcWork.top;
+    return width > 200 && height > 200;
+}
+
 void revealFile(const std::string& utf8Path)
 {
     const std::wstring args = L"/select,\"" + widen(utf8Path) + L"\"";
@@ -274,6 +301,12 @@ void revealFile(const std::string& utf8Path)
 bool canDragFiles() { return false; }
 bool dragFileOut(const std::string&) { return false; }
 void returnKeyboardFocus(uintptr_t) {}
+double windowDpiScale(uintptr_t) { return 0.0; }
+bool screenWorkArea(uintptr_t, int& width, int& height)
+{
+    if (const char* e = std::getenv("GF_TEST_SCREEN")) return std::sscanf(e, "%dx%d", &width, &height) == 2;   // tests
+    return false;
+}
 
 void revealFile(const std::string& utf8Path)
 {
