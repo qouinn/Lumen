@@ -25,19 +25,20 @@ def table(rows, widths, style=B):
                            ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6)]))
     return t
 
-story = [Paragraph("Lumen", TITLE), Paragraph("Sample effect instrument &mdash; user manual, version 1.3", S), Spacer(1, 4 * mm),
+story = [Paragraph("Lumen", TITLE), Paragraph("Sample effect instrument &mdash; user manual, version 1.4", S), Spacer(1, 4 * mm),
          Image(shot, width=165 * mm, height=165 * mm * 760 / 1100), Spacer(1, 3 * mm)]
 
 story += [Paragraph("What it is", H2), P(
     "Lumen plays your sample through <b>219 effect sounds in 13 categories</b>, plus your own: "
-    "granular clouds, shimmering spaces, pads, rhythmic glitches, tape and lo-fi, pitch and harmony, filter motion and drive, breakcore, dreamy, cinematic and sci-fi sounds &mdash; and, new in 1.3, <b>Beautiful Transforms</b>: "
+    "granular clouds, shimmering spaces, pads, rhythmic glitches, tape and lo-fi, pitch and harmony, filter motion and drive, breakcore, dreamy, cinematic and sci-fi sounds &mdash; and <b>Beautiful Transforms</b>: "
     "sounds that turn the sample into a choir, strings, glass, bells or wind chimes. "
     "Pick a sound, turn the four big knobs, and drag the result straight into FL Studio. "
     "It is an instrument (it shows up in your instrument list, not under effects). VST3 and CLAP for Windows 10/11 (64-bit). "
-    "Loads WAV, AIFF, FLAC and MP3.")]
+    "Loads WAV, AIFF, FLAC, MP3, OGG, Opus, M4A/AAC, ALAC and WMA, and the sound of video files (MP4, MOV, MKV, WEBM, AVI, WMV): "
+    "drop a video and Lumen takes its audio.")]
 
 story += [Paragraph("Install", H2), P(
-    "Run <b>Lumen-1.3-Windows-Setup.exe</b> (installing over any older Lumen is fine, and your projects keep their sounds; close your DAW first). It installs Lumen.vst3 to <font face='Courier'>C:\\Program Files\\Common Files\\VST3</font>, "
+    "Run <b>Lumen-1.4-Windows-Setup.exe</b> (installing over any older Lumen is fine, and your projects keep their sounds; close your DAW first). It installs Lumen.vst3 to <font face='Courier'>C:\\Program Files\\Common Files\\VST3</font>, "
     "Lumen.clap to <font face='Courier'>...\\Common Files\\CLAP</font> and this manual to <font face='Courier'>C:\\Program Files\\Lumen</font>. "
     "<b>FL Studio:</b> Options &rarr; Manage plugins &rarr; <i>Find installed plugins</i>; Lumen appears with the instruments (Generators). "
     "SmartScreen may warn because the installer isn't code-signed: <i>More info</i> &rarr; <i>Run anyway</i>.")]
@@ -97,7 +98,7 @@ story += [table([
     ["5 LO-FI", "BITS and RATE (bitcrush, sample-rate reduction), WOW and FLUTTER (tape wobble), HISS, CRACKLE (vinyl) and AGE (old-speaker band limit)."],
     ["6 MOD", "CHORUS, FLANGER, PHASER, TREMOLO, PAN, RING (robot) or VIBRATO with RATE, DEPTH, FEEDBACK and MIX."],
     ["7 STUTTER", "Tempo-synced: REPEAT (repeats the last piece), GATE (rhythmic chopping, 8 patterns), TAPE STOP, REVERSE (pieces play backwards), "
-                  "HALF (half speed). DIVISION sets the piece length, AMOUNT how often (or how deep for GATE)."],
+                  "HALF (half speed) and STUTTER (quick rolls; PATTERN picks 1/16, 1/32 or 1/64 rolls, triplets, speeding up, slowing down, RIPPLE (rising steps) or SCATTER). DIVISION sets the piece length, AMOUNT how often (or how deep for GATE)."],
     ["8 DELAY", "Tempo-synced echo (1/32 to 1/1, dotted values), FEEDBACK, TONE, WOBBLE, MIX and PING-PONG."],
     ["9 REVERB", "SIZE, DECAY (up to 30 s), DAMPING, PREDELAY, SHIMMER (the tail rises an octave), MOTION and MIX."],
 ], [24 * mm, 146 * mm])]
@@ -156,7 +157,7 @@ story += [Paragraph("Credits", H2), Paragraph(
 
 def bg(c, d):
     c.saveState(); c.setFillColor(ACC); c.rect(0, A4[1] - 6, A4[0], 6, stroke=0, fill=1)
-    c.setFont("Helvetica", 8); c.setFillColor(DIM); c.drawRightString(A4[0] - 20 * mm, 10 * mm, "Lumen 1.3  \u00b7  page %d" % d.page); c.restoreState()
+    c.setFont("Helvetica", 8); c.setFillColor(DIM); c.drawRightString(A4[0] - 20 * mm, 10 * mm, "Lumen 1.4  \u00b7  page %d" % d.page); c.restoreState()
 
 SimpleDocTemplate(out, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=15 * mm, bottomMargin=15 * mm,
                   title="Lumen Manual", author="Grainfield Audio").build(story, onFirstPage=bg, onLaterPages=bg)
