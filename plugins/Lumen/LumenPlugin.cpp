@@ -41,7 +41,7 @@ protected:
     const char* getMaker() const override { return DISTRHO_PLUGIN_BRAND; }
     const char* getHomePage() const override { return "https://grainfield.audio"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 3, 0); }
+    uint32_t getVersion() const override { return d_version(1, 4, 0); }
 
     void initAudioPort(bool input, uint32_t index, AudioPort& port) override
     {
@@ -71,7 +71,7 @@ protected:
         case kDMode: setEnum(kDriveNames, 5); break;
         case kFType: setEnum(kFilterNames, 4); break;
         case kMType: setEnum(kModNames, 7); break;
-        case kSMode: setEnum(kStutNames, 5); break;
+        case kSMode: setEnum(kStutNames, 6); break;
         case kSDiv: setEnum(kStutDivNames, 7); break;
         case kYDiv: setEnum(kDelayNames, 9); break;
         case kTlCurve: setEnum(kCurveNames, 3); break;

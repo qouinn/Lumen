@@ -281,10 +281,21 @@ struct Mod {
     }
 };
 
-// 7 STUTTER: tempo-synced repeat / gate / tape stop / reverse / half speed
+// 7 STUTTER: tempo-synced repeat / gate / tape stop / reverse / half speed / stutter rolls
 struct Stutter {
     Ring bl, br; float sr = 44100; int64_t lastChunk = INT64_MIN; double wStart = 0, repSrc = 0; bool active = false, prevActive = false;
     float a = 0, gate = 1; double total = 0;   // total = samples written (absolute counter)
+    double rStart = 0, rLen = 1, rSrc = 0; int rN = 0;   // STUTTER: current retrigger (start within the chunk, length), source slice, count
+    // STUTTER: length of the next retrigger in beats; pos = 0..1 through the chunk, n = retriggers so far
+    static double rollBeats(int pat, double pos, int n, int64_t k) {
+        switch (pat) {
+        case 0: return 0.25; case 1: return 0.125; case 2: return 0.0625; case 3: return 1.0 / 6.0;
+        case 4: return 0.25 * std::pow(0.125, std::min(1.0, pos));            // 1/16 speeding up to 1/128
+        case 5: return 0.03125 * std::pow(8.0, std::min(1.0, pos));           // 1/128 slowing down to 1/16
+        case 6: return 0.125;
+        default: { static const double s[4] = { 0.25, 0.125, 0.0833333, 0.0625 }; return s[hashU(k * 131 + n, 0x77u) < 0.5f ? (n & 1) : 2 + (n & 1)]; }
+        }
+    }
     static constexpr uint16_t kPat[8] = { 0xFFFF, 0xAAAA, 0xEEEE, 0xB6B6, 0x9249, 0xF0F0, 0xDB6D, 0x8888 };
     void init(float s) { sr = s; bl.init((size_t)(s * 9)); br.init((size_t)(s * 9)); reset(); }
     void reset() { bl.clear(); br.clear(); lastChunk = INT64_MIN; active = prevActive = false; a = 0; gate = 1; total = 0; }
@@ -302,6 +313,7 @@ struct Stutter {
             const float amt = q[kSAmt];
             active = mode == 1 ? true : hashU(k, 0x51u + (uint32_t)mode) < amt;
             if (mode == 0 && active && !prevActive) repSrc = wStart - ls;   // start repeating the chunk that just played
+            if (mode == 5) { rStart = 0; rN = 0; rLen = std::max(32.0, rollBeats((int)q[kSPat], 0, 0, k) * 60.0 / bpm * sr); rSrc = wStart - 1; }
         }
         float pl = L, pr = R;
         const double d = std::min(ts, ls);
@@ -314,8 +326,21 @@ struct Stutter {
             gate += (target - gate) * (target > gate ? 0.02f : 0.006f);
             pl = L * gate; pr = R * gate;
             break; }
-        case 2: if (active) { const double p = wStart + d - d * d / (2.0 * ls); pl = bl.abs(p) * (float)std::sqrt(std::max(0.0, 1.0 - d / ls)); pr = br.abs(p) * (float)std::sqrt(std::max(0.0, 1.0 - d / ls)); } break;
+        case 2: if (active) { const double p = wStart - 1.0 + d - d * d / (2.0 * ls); pl = bl.abs(p) * (float)std::sqrt(std::max(0.0, 1.0 - d / ls)); pr = br.abs(p) * (float)std::sqrt(std::max(0.0, 1.0 - d / ls)); } break;
         case 3: if (active) { const double p = wStart - 1.0 - d; pl = bl.abs(p); pr = br.abs(p); } break;
+        case 5: if (active) {
+            // fast retriggers of the slice that starts the chunk; each one gets its own soft edges, so it ripples instead of clicking
+            const int pat = std::min(7, std::max(0, (int)q[kSPat]));
+            while (d - rStart >= rLen) { rStart += rLen; ++rN; rLen = std::max(32.0, rollBeats(pat, rStart / ls, rN, k) * 60.0 / bpm * sr); }
+            const double t = d - rStart;
+            static const int up[6] = { 0, 2, 4, 7, 9, 12 };                              // RIPPLE climbs a pentatonic scale
+            const double sp = pat == 6 ? std::pow(2.0, up[rN % 6] / 12.0) : 1.0;
+            const double p = std::min(total - 1.0, (pat == 6 ? rSrc - 2.0 * rLen : rSrc) + t * sp);
+            const double atk = 0.0015 * sr, rel = std::min(0.006 * sr, rLen * 0.35);
+            const float env = (float)(std::min(1.0, t / atk) * std::min(1.0, (rLen - t) / rel));
+            const float fall = pat == 2 ? 0.8f : 1.0f - 0.25f * (float)std::min(1.0, d / ls);   // rolls ease off a little towards the end
+            pl = bl.abs(p) * env * fall; pr = br.abs(p) * env * fall;
+            break; }
         default: if (active) { const double p = wStart - ls + d * 0.5; pl = bl.abs(p); pr = br.abs(p); } break;
         }
         if (mode != 1) {

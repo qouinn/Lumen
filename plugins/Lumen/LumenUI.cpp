@@ -110,7 +110,7 @@ const ModLayout kLayouts[9] = {
     { (int)kFType, kFilterNames, 4, { kFCut, kFRes, kFRate, kFDepth, kFEnv }, 5, { "CUTOFF", "RESO", "LFO RATE", "LFO DEPTH", "ENVELOPE" }, -1, nullptr },
     { -1, nullptr, 0, { kLBits, kLRate, kLWow, kLFlutter, kLNoise, kLCrackle, kLAge }, 7, { "BITS", "RATE", "WOW", "FLUTTER", "HISS", "CRACKLE", "AGE" }, -1, nullptr },
     { (int)kMType, kModNames, 7, { kMRate, kMDepth, kMFb, kMMix }, 4, { "RATE", "DEPTH", "FEEDBACK", "MIX" }, -1, nullptr },
-    { (int)kSMode, kStutNames, 5, { kSDiv, kSPat, kSAmt, kSMix }, 4, { "DIVISION", "PATTERN", "AMOUNT", "MIX" }, -1, nullptr },
+    { (int)kSMode, kStutNames, 6, { kSDiv, kSPat, kSAmt, kSMix }, 4, { "DIVISION", "PATTERN", "AMOUNT", "MIX" }, -1, nullptr },
     { -1, nullptr, 0, { kYDiv, kYFb, kYTone, kYMod, kYMix }, 5, { "TIME", "FEEDBACK", "TONE", "WOBBLE", "MIX" }, (int)kYPing, "PING-PONG" },
     { -1, nullptr, 0, { kRSize, kRDecay, kRDamp, kRPre, kRShim, kRMod, kRMix }, 7, { "SIZE", "DECAY", "DAMPING", "PREDELAY", "SHIMMER", "MOTION", "MIX" }, -1, nullptr },
 };
@@ -131,9 +131,9 @@ public:
         fFontMed  = createFontFromMemory("inter-med",  kFontInterMedium,  kFontInterMediumSize,  false);
         fFontSemi = createFontFromMemory("inter-semi", kFontInterSemiBold, kFontInterSemiBoldSize, false);
         fFontBold = createFontFromMemory("inter-bold", kFontInterBold,    kFontInterBoldSize,    false);
-        const double sf = getScaleFactor();
-        if (sf > 0.0 && std::fabs(sf - 1.0) > 0.01) setSize((uint)std::lround(W * sf), (uint)std::lround(H * sf));
-        setGeometryConstraints((uint)(W * 0.55f), (uint)(H * 0.55f), true, false);
+        fHostScale = getScaleFactor();
+        setGeometryConstraints((uint)(W * 0.5f), (uint)(H * 0.5f), true, false);
+        openAtRightSize();
         updateScale(getWidth(), getHeight());
         fSample = std::make_shared<SampleData>(); makeLumenSource(*fSample, 44100.0); fName = "Built-in \xC2\xB7 piano & beat"; fBuiltin = true;
         for (auto& row : fSecOv) for (float& v : row) v = kNoEdit;
@@ -142,7 +142,11 @@ public:
         buildKnobs();
     }
 
-    ~LumenUI() override { if (fJob) { fJob->cancel.store(true); if (fJob->th.joinable()) fJob->th.join(); } }
+    ~LumenUI() override
+    {
+        if (fJob) { fJob->cancel.store(true); if (fJob->th.joinable()) fJob->th.join(); }
+        saveZoom();
+    }
 
 protected:
     // =========================================================================================
@@ -192,8 +196,53 @@ protected:
         if (fV[kPlay] > 0.5f || fGlow > 0.01f || fToastTime > 0 || fV[kOutPlaying] > 0.5f) repaint();
     }
 
-    void uiScaleFactorChanged(const double sf) override { if (sf > 0) setSize((uint)std::lround(W * sf), (uint)std::lround(H * sf)); }
-    void onResize(const ResizeEvent& ev) override { updateScale(ev.size.getWidth(), ev.size.getHeight()); UI::onResize(ev); }
+    void uiScaleFactorChanged(const double sf) override { if (sf > 0) { fHostScale = sf; openAtRightSize(); } }
+    void onResize(const ResizeEvent& ev) override
+    {
+        updateScale(ev.size.getWidth(), ev.size.getHeight());
+        const double ds = displayScale();
+        if (ds > 0 && ev.size.getWidth() > 50) fZoom = clampf((float)(ev.size.getWidth() / (W * ds)), 0.5f, 3.0f);   // remembered for next time
+        UI::onResize(ev);
+    }
+
+    // ---- window size: the right scale for this screen, the size you last used, never bigger than the screen
+    double fHostScale = 1.0; float fZoom = -1.0f;
+    mutable const float* fPatSrc = nullptr;   // the values the knob being drawn belongs to (for the STUTTER pattern names)
+    double displayScale() const {
+        const double d = gf::windowDpiScale(getWindow().getNativeWindowHandle());   // the window's real DPI (1.0 if Windows stretches it)
+        return d > 0 ? d : (fHostScale > 0 ? fHostScale : 1.0);
+    }
+    static std::string zoomFile() {
+#ifdef _WIN32
+        return gf::documentsFolder("Lumen") + "\\window.txt";
+#else
+        return gf::documentsFolder("Lumen") + "/window.txt";
+#endif
+    }
+    static float& savedZoom() { static float z = -1.0f; if (z < 0) { std::string t; z = 1.0f; if (gf::readTextFile(zoomFile(), t)) { const float v = std::strtof(t.c_str(), nullptr); if (v >= 0.5f && v <= 3.0f) z = v; } } return z; }
+    void saveZoom() {
+        if (fZoom < 0.5f || std::fabs(fZoom - savedZoom()) < 0.01f) return;
+        savedZoom() = fZoom;
+        char b[32]; std::snprintf(b, sizeof b, "%.3f\n", fZoom);
+        gf::writeTextFile(zoomFile(), b);
+    }
+    void openAtRightSize() {
+        const double sf = displayScale();
+        const float zoom = fZoom > 0 ? fZoom : savedZoom();
+        double w = W * sf * zoom, h = H * sf * zoom;
+        int sw = 0, sh = 0;
+        if (gf::screenWorkArea(getWindow().getNativeWindowHandle(), sw, sh)) {   // leave room for the host's window frame
+            const double k = std::min(1.0, std::min(sw * 0.92 / w, (sh - 110.0) / h));
+            if (k > 0.2) { w *= k; h *= k; }
+        }
+        const uint uw = (uint)std::lround(std::max(W * 0.5, w)), uh = (uint)std::lround(std::max(H * 0.5, h));
+        // the window itself and the drawing area must agree: DPF can create the window at host scale while the
+        // drawing area stays at 1x, and then every click lands in the wrong place
+        Window& win = getWindow();
+        if (uw != win.getWidth() || uh != win.getHeight()) win.setSize(uw, uh);
+        if (uw != getWidth() || uh != getHeight()) setSize(uw, uh);
+        fZoom = (float)(uw / (W * sf));
+    }
 
     // =========================================================================================
     // drawing helpers
@@ -240,6 +289,7 @@ protected:
     // =========================================================================================
     void onNanoDisplay() override
     {
+        updateScale(getWidth(), getHeight());   // the same mapping the mouse uses
         const float sw = getWidth() / fScale, sh = getHeight() / fScale;
         scale(fScale, fScale); translate(fOffX, fOffY);
         beginPath(); rect(-fOffX, -fOffY, sw, sh);
@@ -288,7 +338,7 @@ protected:
     {
         drawLogo(32, 31);
         txt(58, 29, "LUMEN", cText, 19, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 4.0f);
-        txt(59, 48, "SAMPLE FX INSTRUMENT  \xC2\xB7  1.3", cDim, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 1.6f);
+        txt(59, 48, "SAMPLE FX INSTRUMENT  \xC2\xB7  1.4", cDim, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 1.6f);
         {
             const bool on = fV[kOriginal] > 0.5f;
             beginPath(); roundedRect(rOrig.x, rOrig.y, rOrig.w, rOrig.h, 11);
@@ -585,7 +635,7 @@ protected:
         case kLRate: std::snprintf(b, n, "%.1f kHz", v / 1000); return;
         case kRDecay: std::snprintf(b, n, "%.1f s", v); return;
         case kSDiv: std::snprintf(b, n, "%s", kStutDivNames[std::min(6, std::max(0, (int)v))]); return;
-        case kSPat: std::snprintf(b, n, "pattern %d", (int)v + 1); return;
+        case kSPat: if ((int)(fPatSrc ? fPatSrc : fV)[kSMode] == 5) std::snprintf(b, n, "%s", kRollNames[std::min(7, std::max(0, (int)v))]); else std::snprintf(b, n, "pattern %d", (int)v + 1); return;
         case kYDiv: std::snprintf(b, n, "%s", kDelayNames[std::min(8, std::max(0, (int)v))]); return;
         case kMFb: case kYFb: std::snprintf(b, n, "%.0f %%", v * 100); return;
         default: std::snprintf(b, n, "%.0f %%", v * 100); return;
@@ -596,6 +646,7 @@ protected:
         const Knob& k = fKnobs[(size_t)i];
         const bool isMacro = k.macro >= 0;
         const float* S = (src && !isMacro) ? src : fV;
+        fPatSrc = S;
         const int drivenBy = isMacro ? -1 : macroFor(S, k.param);
         const float v = (q && drivenBy >= 0) ? q[k.param] : S[k.param];
         const float nrm = clampf(toNorm(k.param, v), 0, 1);
@@ -632,7 +683,14 @@ protected:
 
     // =========================================================================================
     // input
-    void toDesign(double px, double py, float& x, float& y) const { x = (float)px / fScale - fOffX; y = (float)py / fScale - fOffY; }
+    // window pixels -> design coordinates, always from the window's current size (so clicks land at any size)
+    void toDesign(double px, double py, float& x, float& y) const {
+        const float w = (float)getWidth(), h = (float)getHeight();
+        const float ww = (float)getWindow().getWidth(), wh = (float)getWindow().getHeight();
+        if (ww > 1 && wh > 1 && (std::fabs(ww - w) > 1 || std::fabs(wh - h) > 1)) { px *= w / ww; py *= h / wh; }   // mouse arrives in window pixels
+        float sc = std::min(w / W, h / H); if (sc <= 0.01f) sc = 1.0f;
+        x = (float)px / sc - (w / sc - W) * 0.5f; y = (float)py / sc - (h / sc - H) * 0.5f;
+    }
 
     bool onMouse(const MouseEvent& ev) override
     {

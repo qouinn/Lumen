@@ -88,7 +88,7 @@ enum : uint32_t { F_INT = 1, F_LOG = 2, F_BOOL = 4, F_OUT = 8 };
     X(kMMix,      "Mod Mix",           "m_mix",       0, 1, 0.5f, 0) \
     /* 7 STUTTER */ \
     X(kSOn,       "Stutter On",        "s_on",        0, 1, 0, F_INT | F_BOOL) \
-    X(kSMode,     "Stutter Mode",      "s_mode",      0, 4, 0, F_INT) \
+    X(kSMode,     "Stutter Mode",      "s_mode",      0, 5, 0, F_INT) \
     X(kSDiv,      "Stutter Division",  "s_div",       0, 6, 3, F_INT) \
     X(kSAmt,      "Stutter Amount",    "s_amt",       0, 1, 0.5f, 0) \
     X(kSPat,      "Stutter Pattern",   "s_pat",       0, 7, 0, F_INT) \
@@ -215,7 +215,9 @@ inline constexpr const char* kKeysNames[]    = { "PITCH", "TRIGGER" };
 inline constexpr const char* kDriveNames[]   = { "SOFT", "HARD", "FOLD", "FUZZ", "TUBE" };
 inline constexpr const char* kFilterNames[]  = { "LP", "HP", "BP", "NOTCH" };
 inline constexpr const char* kModNames[]     = { "CHORUS", "FLANGER", "PHASER", "TREMOLO", "PAN", "RING", "VIBRATO" };
-inline constexpr const char* kStutNames[]    = { "REPEAT", "GATE", "TAPE STOP", "REVERSE", "HALF" };
+inline constexpr const char* kStutNames[]    = { "REPEAT", "GATE", "TAPE STOP", "REVERSE", "HALF", "STUTTER" };
+// STUTTER mode: what PATTERN does
+inline constexpr const char* kRollNames[] = { "1/16 ROLL", "1/32 ROLL", "1/64 BUZZ", "TRIPLETS", "SPEED UP", "SLOW DOWN", "RIPPLE", "SCATTER" };
 inline constexpr const char* kStutDivNames[] = { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/8T" };
 inline constexpr float       kStutDivBeats[] = { 4, 2, 1, 0.5f, 0.25f, 0.125f, 1.0f / 3.0f };
 inline constexpr const char* kDelayNames[]   = { "1/32", "1/16", "1/16D", "1/8", "1/8D", "1/4", "1/4D", "1/2", "1/1" };
