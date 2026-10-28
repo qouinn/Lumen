@@ -214,9 +214,9 @@ preset(C, 'Beat Repeat', 'Random 1/8 repeats in time with your project.',
 preset(C, 'Trance Gate', 'Classic chopping gate pattern on 1/16s.',
        M(stut(1, 4, 0.9, 2), rev(0.2, 0.5, 2.0)),
        [('DEPTH', [('s_amt', 0.0, 1.0)]), ('PATTERN', [('s_pat', 0, 7)]), ('RATE', [('s_div', 2, 5)]), SPACE], (0.9, 0.3, 0.5, 0.5))
-preset(C, 'Tape Stop', 'Every now and then the tape slows to a halt.',
-       M(stut(2, 1, 0.5), rev(0.1, 0.4, 1.5)),
-       [('HOW OFTEN', [('s_amt', 0.0, 1.0)]), ('LENGTH', [('s_div', 0, 3)]), ('MIX', [('s_mix', 0.3, 1.0)]), SPACE])
+preset(C, 'DJ Roll', 'Now and then a beat breaks into a quick DJ-style roll; ROLL picks 1/16, 1/32, 1/64 or triplets.',
+       M(stut(5, 2, 0.4, 1), rev(0.12, 0.4, 1.5)),
+       [('HOW OFTEN', [('s_amt', 0.0, 1.0)]), ('ROLL', [('s_pat', 0, 3)]), ('LENGTH', [('s_div', 1, 3)]), SPACE])
 preset(C, 'Reverse Chops', 'Pieces of the sample flip backwards in time.',
        M(stut(3, 2, 0.45), dly(3, 0.3, 0.15)),
        [('AMOUNT', [('s_amt', 0.0, 0.9)]), ('PIECE', [('s_div', 1, 4)]), ECHO, ('MIX', [('s_mix', 0.3, 1.0)])])
@@ -244,9 +244,9 @@ preset(C, 'Bitcrush Repeat', 'Crushed and repeated, 8-bit style.',
 preset(C, 'Echo Slap', 'Short tempo echoes that bounce left and right.',
        M(dly(1, 0.45, 0.4, 1, 0.7, 0.0)),
        [ECHO, ('TIME', [('y_div', 0, 5)]), ('TONE', [('y_tone', 0.1, 1.0)]), ('WOBBLE', [('y_mod', 0.0, 0.8)])])
-preset(C, 'Broken Tape', 'Tape stops, wow and hiss: a malfunctioning machine.',
-       M(stut(2, 2, 0.4), lofi(16, 48000, 0.5, 0.4, 0.2, 0.1, 0.35)),
-       [('STOPS', [('s_amt', 0.0, 1.0)]), ('WOBBLE', [('l_wow', 0.0, 1.0), ('l_flutter', 0.0, 0.8)]), ('AGE', [('l_age', 0.0, 0.8)]), ('HISS', [('l_noise', 0.0, 0.8)])])
+preset(C, 'Ratchet', 'Eighth notes burst into quick triplet ratchets, with a little tape warmth and echo.',
+       M(stut(5, 3, 0.45, 3), lofi(16, 48000, 0.15, 0.1, 0.04, 0.0, 0.15), dly(5, 0.25, 0.12)),
+       [('RATCHETS', [('s_amt', 0.0, 1.0)]), ('WARMTH', [('l_age', 0.0, 0.6), ('l_wow', 0.0, 0.4)]), ECHO, ('MIX', [('s_mix', 0.3, 1.0)])])
 preset(C, 'Glitch Grains', 'Rhythmic repeats mixed with scattered grains.',
        M(stut(0, 4, 0.4), grn(0.5, 50, 25, 0, 0.6, 0.4, 0.5), rev(0.2, 0.5, 2.0)),
        [('REPEAT', [('s_amt', 0.0, 0.9)]), ('GRAINS', [('g_mix', 0.0, 1.0)]), ('CHAOS', [('g_jit', 0.0, 1.0)]), SPACE])
@@ -543,9 +543,9 @@ preset(C, 'Break Scramble', 'The beat cut into 1/16-long slices and shuffled int
 preset(C, 'Machine Gun', 'A 1/32 gate firing through fuzz and a short flanger.',
        M(stut(1, 5, 1.0, 1), drv(3, 0.55, 0.6), mod(1, 2.5, 0.4, 0.6, 0.4)),
        [('FIRE', [('s_amt', 0.0, 1.0)]), ('FUZZ', [('d_amt', 0.0, 1.0)]), ('METAL', [('m_mix', 0.0, 0.9)]), ('PATTERN', [('s_pat', 0, 7)])], (1.0, 0.55, 0.45, 0.14))
-preset(C, 'Tape Slam', 'Whole bars slam to a halt an octave down, then crash back in.',
-       M(stut(2, 0, 0.35), pit(-12, -24, 0.4, 0.0, 1.0), drv(3, 0.4, 0.5, 0.8)),
-       [('SLAMS', [('s_amt', 0.0, 0.9)]), ('WEIGHT', [('p_mix_a', 0.0, 0.9)]), ('FUZZ', [('d_amt', 0.0, 0.9)]), ('LENGTH', [('s_div', 0, 2)])])
+preset(C, 'Speed Roll', 'Half-bar rolls that speed up into a breathless buzz, with crunch.',
+       M(stut(5, 1, 0.45, 4), drv(1, 0.3, 0.6, 0.8), rev(0.12, 0.4, 1.2)),
+       [('PANIC', [('s_amt', 0.0, 0.9)]), ('LENGTH', [('s_div', 0, 2)]), ('CRUNCH', [('d_amt', 0.0, 0.8)]), SPACE])
 preset(C, 'Inside Out', 'Backwards 1/16 slivers through a wavefolder and a fast phaser: turned inside out.',
        M(stut(3, 4, 0.6), drv(2, 0.55, 0.6, 0.8), mod(2, 4.0, 0.8, 0.6, 0.5)),
        [('REVERSE', [('s_amt', 0.0, 1.0)]), ('FOLD', [('d_amt', 0.0, 1.0)]), ('SWIRL', [('m_mix', 0.0, 1.0), ('m_rate', 0.5, 8.0)]), ('PIECE', [('s_div', 2, 5)])])
@@ -573,9 +573,9 @@ preset(C, 'Overdrive Chop', 'Hard-clipped stabs on a sparse 1/8 gate with slap e
 preset(C, 'Panic Attack', 'Racing tremolo, nervous 1/32 stutters and a thin, driven edge.',
        M(mod(3, 14.0, 0.9, 0, 1.0), stut(0, 5, 0.25), filt(1, 300, 0.2), drv(0, 0.35, 0.6)),
        [('PANIC', [('m_rate', 4.0, 20.0)]), ('DEPTH', [('m_depth', 0.2, 1.0)]), ('STUTTER', [('s_amt', 0.0, 0.8)]), ('EDGE', [('d_amt', 0.0, 0.9)])])
-preset(C, 'Digital Meltdown', 'A crushed signal melting with tape wow and stopping dead.',
-       M(lofi(4, 3000, 0.6, 0.3, 0.1, 0, 0.0), stut(2, 1, 0.45), drv(1, 0.2, 0.5)),
-       [('MELT', [('l_wow', 0.0, 1.0)]), ('BITS', [('l_bits', 10, 2)]), ('STOPS', [('s_amt', 0.0, 1.0)]), ('DRIVE', [('d_amt', 0.0, 0.8)])])
+preset(C, 'Glitch Rush', 'Scattered rolls of every speed hop around the beat through a light bitcrusher.',
+       M(stut(5, 4, 0.55, 7), lofi(10, 22000), drv(1, 0.2, 0.5)),
+       [('RUSH', [('s_amt', 0.0, 1.0)]), ('BITS', [('l_bits', 12, 4)]), ('SIZE', [('s_div', 3, 5)]), ('DRIVE', [('d_amt', 0.0, 0.7)])])
 preset(C, 'Rewind', 'A DJ rewind: whole bars now and then spin backwards with a chipmunk edge and a jet swoosh.',
        M(stut(3, 0, 0.4), pit(12, 0, 0.35, 0.0, 1.0), mod(1, 0.4, 0.6, 0.6, 0.4)),
        [('REWINDS', [('s_amt', 0.0, 1.0)]), ('LENGTH', [('s_div', 0, 2)]), ('SQUEAL', [('p_mix_a', 0.0, 1.0)]), ('SWOOSH', [('m_mix', 0.0, 0.9)])])
@@ -597,9 +597,9 @@ preset(C, 'Daydream', 'Backwards grains, wide chorus and a faint shimmer: drifti
 preset(C, 'Last Summer', 'Warm, golden and slightly worn, like a summer you remember.',
        M(drv(4, 0.3, 0.4, 0.7), lofi(16, 48000, 0.2, 0.05, 0.04, 0.05, 0.15), dly(4, 0.35, 0.18, 1, 0.35), lp(6500, 0.1)),
        [('WARMTH', [('d_amt', 0.0, 0.8)]), ('WOBBLE', [('l_wow', 0.0, 0.7)]), ('ECHO', [('y_mix', 0.0, 0.45)]), TONE])
-preset(C, 'Nostalgia Loop', 'A worn memory loop that sometimes slows down and catches itself.',
-       M(stut(2, 1, 0.18), lofi(14, 36000, 0.25, 0.1, 0.08, 0.15, 0.4), rev(0.3, 0.55, 2.5, 0.6)),
-       [('CATCH', [('s_amt', 0.0, 0.7)]), ('WORN', [('l_age', 0.0, 0.9)]), ('DUST', [('l_crackle', 0.0, 0.8)]), SPACE])
+preset(C, 'Rising Petals', 'Now and then the sound climbs in quick pentatonic steps and blooms into a shimmering hall.',
+       M(stut(5, 2, 0.35, 6), dly(5, 0.35, 0.18), rev(0.4, 0.75, 5.0, 0.4, 0.3)),
+       [('RIPPLES', [('s_amt', 0.0, 0.8)]), GLOW, ECHO, SPACE])
 preset(C, 'Snow Globe', 'A frozen, glittering moment two octaves up, floating over the sound.',
        M(grn(0.45, 150, 30, 0, 0.4, 0.1, 0.3, 1), pit(24, 12, 0.4, 0.2, 1.0), filt(1, 500, 0.1), rev(0.45, 0.75, 6.0, 0.15, 0.25)),
        [('SNOW', [('p_mix_a', 0.0, 0.9)]), ('FROZEN', [('g_mix', 0.0, 0.9)]), GLOW, ('SPACE', [('r_mix', 0.1, 0.8)])])
@@ -672,9 +672,9 @@ preset(C, 'Dissonance', 'A semitone rubbing against the sound with a slow phase:
 preset(C, 'Bell Toll', 'A metallic, bell-like ring in a dark cathedral.',
        M(mod(5, 4.0, 1.0, 0, 0.35), lp(5000, 0.15), rev(0.55, 1.0, 12.0, 0.5, 0.0, 0.2, 40)),
        [('BELL', [('m_mix', 0.0, 0.8)]), ('PITCH', [('m_rate', 1.0, 9.0)]), ('CATHEDRAL', [('r_mix', 0.1, 0.9)]), TONE])
-preset(C, 'Nightmare', 'Grains jumping between octaves a fifth down, with sudden slowdowns.',
-       M(grn(0.8, 140, 22, -7, 0.5, 0.4, 1.0), stut(2, 1, 0.2), lp(4000, 0.3), rev(0.45, 0.8, 7.0, 0.7)),
-       [('NIGHTMARE', [('g_jit', 0.2, 1.0)]), ('SLOWDOWNS', [('s_amt', 0.0, 0.8)]), ('DARK', [('f_cut', 8000, 800)]), SPACE])
+preset(C, 'Suspense Roll', 'Now and then a roll slows down like a held breath, under a dark, wide hall.',
+       M(stut(5, 1, 0.3, 5), lp(5000, 0.2), rev(0.45, 0.85, 6.0, 0.6)),
+       [('TENSION', [('s_amt', 0.0, 0.8)]), ('DARK', [('f_cut', 9000, 1200)]), ('LENGTH', [('s_div', 0, 2)]), SPACE])
 preset(C, 'Siren Sweep', 'A slow, wailing vibrato in a huge, echoing street.',
        M(mod(6, 0.25, 0.9, 0, 1.0), filt(2, 1500, 0.3), dly(7, 0.45, 0.3, 1, 0.4), rev(0.45, 0.9, 6.0, 0.5)),
        [('WAIL', [('m_depth', 0.0, 1.0)]), ('SPEED', [('m_rate', 0.05, 1.5)]), ECHO, ('SPACE', [('r_mix', 0.1, 0.8)])])
@@ -711,9 +711,9 @@ preset(C, 'Morse Code', 'A narrow resonant beep tapped out by a sparse 1/16 gate
 preset(C, 'Hologram', 'A shimmering, slightly detuned double that does not quite exist.',
        M(mod(0, 0.9, 0.9, 0.3, 0.6), pit(0.4, -0.4, 0.4, 0.4, 0.7), filt(1, 300, 0.1), rev(0.4, 0.7, 5.0, 0.2, 0.35)),
        [('FLICKER', [('m_mix', 0.0, 1.0), ('m_rate', 0.2, 4.0)]), ('DETUNE', [('p_a', 0.0, 1.0), ('p_b', 0.0, -1.0)]), GLOW, ('LIGHT', [('f_cut', 50, 2000)])])
-preset(C, 'Time Warp', 'Time bends: deep slow pitch drift and half-bar tape stops.',
-       M(mod(6, 0.15, 1.0, 0, 1.0), stut(2, 1, 0.3), rev(0.35, 0.7, 4.0, 0.4)),
-       [('WARP', [('m_depth', 0.0, 1.0)]), ('SPEED', [('m_rate', 0.05, 1.0)]), ('STOPS', [('s_amt', 0.0, 0.9)]), SPACE])
+preset(C, 'Hyperdrive', 'Quarter notes whir into a fast buzz with an octave on top, swept by a jet flanger.',
+       M(stut(5, 2, 0.4, 2), pit(12, 0, 0.3, 0.0, 1.0), mod(1, 0.3, 0.7, 0.6, 0.5), rev(0.3, 0.6, 3.0)),
+       [('WARP', [('s_amt', 0.0, 0.9)]), ('OCTAVE', [('p_mix_a', 0.0, 0.7)]), ('JET', [('m_mix', 0.0, 0.9)]), SPACE])
 preset(C, 'Quantum Glitch', 'Reversed 1/32 slivers, folded metal and scattered grains.',
        M(stut(3, 5, 0.5), drv(2, 0.5, 0.6, 0.7), grn(0.4, 30, 40, 0, 0.6, 0.5, 0.8)),
        [('GLITCH', [('s_amt', 0.0, 1.0)]), ('FOLD', [('d_amt', 0.0, 1.0)]), ('PARTICLES', [('g_mix', 0.0, 1.0)]), ('CHAOS', [('g_jit', 0.0, 1.0)])])
