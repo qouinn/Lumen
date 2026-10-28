@@ -21,12 +21,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y g++-mingw-w64-x86-64-posix nsis python3-reportlab \
-            libgl-dev libx11-dev libxcursor-dev libxext-dev libxrandr-dev
-      - name: Engine tests (all 204 sounds, level matching, duplicate check, timeline)
+            libgl-dev libx11-dev libxcursor-dev libxext-dev libxrandr-dev ffmpeg
+      - name: Engine tests (all 219 sounds, level matching, duplicate check, timeline)
         run: |
           mkdir -p build/out
           g++ -std=gnu++17 -O2 -Iplugins/Shared -Iplugins/Lumen -Idpf/distrho plugins/Lumen/tests/test_lumen.cpp plugins/Shared/Export.cpp -o build/test_lumen
           build/test_lumen build/out
+      - name: File format tests (audio formats and the audio of videos)
+        run: |
+          bash plugins/Lumen/tests/make_format_files.sh build/fmt
+          g++ -std=gnu++17 -O2 -Iplugins/Shared plugins/Lumen/tests/test_formats.cpp plugins/Shared/AudioFile.cpp -o build/test_formats
+          build/test_formats build/fmt
       - name: Build Linux
         run: bash build.sh linux
       - name: Build Windows + installer
