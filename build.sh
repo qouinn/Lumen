@@ -31,7 +31,7 @@ case "$TARGET" in
     PLAT="-mstackrealign -mtune=generic -msse -msse2 -mfpmath=sse -D__STDC_FORMAT_MACROS=1 -D__USE_MINGW_ANSI_STDIO=1"
     SYS_DGL=""
     LINK="-shared -static -static-libgcc -static-libstdc++ -Wl,-O1,--as-needed,--gc-sections -Wl,--strip-all -Wl,--no-undefined"
-    LIBS="-lopengl32 -lcomdlg32 -ldwmapi -lgdi32 -lole32 -lshell32 -luuid -lm"
+    LIBS="-lopengl32 -lcomdlg32 -ldwmapi -lgdi32 -lole32 -lshell32 -luuid -lmfuuid -lm"
     VST3_BIN="$OUT/$NAME.vst3/Contents/x86_64-win/$NAME.vst3"
     CLAP_BIN="$OUT/$NAME.clap"
     VST3_SYMS="$DPF/utils/symbols/vst3.def"; CLAP_SYMS="$DPF/utils/symbols/clap.def"
