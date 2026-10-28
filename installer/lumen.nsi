@@ -1,10 +1,10 @@
-; Lumen 1.3 — Windows installer (NSIS)
+; Lumen 1.4 — Windows installer (NSIS)
 Unicode true
 SetCompressor /SOLID lzma
 ManifestDPIAware true
 
 !define APPNAME   "Lumen"
-!define VERSION   "1.3.0"
+!define VERSION   "1.4.0"
 !define PUBLISHER "Grainfield Audio"
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Lumen"
 !ifndef BINDIR
@@ -14,7 +14,7 @@ ManifestDPIAware true
   !define PAYLOAD "..\dist\payload-lumen"
 !endif
 !ifndef OUTFILE
-  !define OUTFILE "..\dist\Lumen-1.3-Windows-Setup.exe"
+  !define OUTFILE "..\dist\Lumen-1.4-Windows-Setup.exe"
 !endif
 
 Name "${APPNAME} ${VERSION}"
@@ -23,7 +23,7 @@ InstallDir "$PROGRAMFILES64\${APPNAME}"
 RequestExecutionLevel admin
 BrandingText "${APPNAME} ${VERSION} - ${PUBLISHER}"
 
-VIProductVersion "1.3.0.0"
+VIProductVersion "1.4.0.0"
 VIAddVersionKey "ProductName" "${APPNAME}"
 VIAddVersionKey "CompanyName" "${PUBLISHER}"
 VIAddVersionKey "FileDescription" "${APPNAME} sample effect instrument installer"
