@@ -1,17 +1,17 @@
 # Lumen
 
 **A sample effect instrument for FL Studio and other DAWs (VST3 + CLAP, Windows 64-bit).**
-Load a sound (or a video: Lumen takes its audio), pick one of **219 hand-built effect sounds** in 13 categories (or one of your own), shape it with four big knobs, and drag the result straight into your project.
+Load a sound (drag it in from FL Studio's browser, or load a video: Lumen takes its audio), pick one of **267 hand-built effect sounds** in 13 categories (or one of your own), shape it with four big knobs, and drag the result straight into your project.
 
 ![Lumen — SOUNDS page](docs/lumen_screenshot.png)
 
 > **Vibecoded, openly.** Lumen was written entirely by [Claude](https://claude.ai) (Anthropic's AI) in conversation.
 > I described what I wanted, tried every build in FL Studio and said what to change; Claude wrote the DSP, the UI, the
-> 219 sound recipes, the tests, the installer and the manual. Use it, read it, fork it.
+> 267 sound recipes, the tests, the installer and the manual. Use it, read it, fork it.
 
 ## Download
 
-Get **Lumen-1.4-Windows-Setup.exe** from [Releases](../../releases). The installer puts
+Get **Lumen-1.5-Windows-Setup.exe** from [Releases](../../releases). The installer puts
 `Lumen.vst3` in `C:\Program Files\Common Files\VST3` and `Lumen.clap` in `C:\Program Files\Common Files\CLAP`, plus the manual.
 In FL Studio: *Options → Manage plugins → Find installed plugins*; Lumen is listed with the instruments.
 The installer isn't code-signed, so SmartScreen may warn: *More info → Run anyway*.
@@ -19,17 +19,21 @@ Installing over an older version is fine, and projects keep their sounds.
 
 ## What it does
 
-- **219 effect sounds in 13 categories**, level-matched, each with 4 macro knobs:
+- **267 effect sounds in 13 categories**, level-matched, each with 4 macro knobs:
   Granular · Shimmer & Space · Pads & Textures · Rhythm & Glitch · Lo-Fi & Tape · Pitch & Harmony · Filter & Motion ·
   Drive & Character · Breakcore & Chaos · Dreamy & Nostalgic · Cinematic & Dark · Sci-Fi & Experimental · Beautiful Transforms.
   For example *Angel Choir*, *String Section*, *Wind Chimes*, *Harp Ripples*, *Panic Attack*, *Break Scramble* (the beat cut into 1/16 slices and shuffled),
   *Polaroid* (a frozen snapshot fading in and out), *Shoegaze Wall*, *Doppler Space*, *Event Horizon*, *Trailer Boom*.
+- **New in 1.5**: 48 sounds built on four new engine parts — a tuned **comb** resonator (*Sympathetic Strings*, *Steel Pan Echo*, *Bell Tower*),
+  a talking **vowel** filter (*Talking Sample*, *Robot Speech*, *Talkbox Groove*), **rectify** octave fuzz (*Octave Organ*, *Buzzsaw*) and a
+  **frequency shifter** (*Endless Rise*, *Barber Pole*, *Inharmonic Bells*). They carry a NEW badge until you have tried each one.
+- **Drag and drop**: drag a sample from FL Studio's browser, Explorer or anywhere else onto the window to load it.
 - **Own presets**: change a sound, click SAVE AS OWN PRESET, give it a name. It lives in `Documents/Lumen/Own Presets.txt`
   and in every project that uses it.
 - **EDIT page**: every sound is built from 9 modules — GRAIN → PITCH → DRIVE → FILTER → LO-FI → MOD → STUTTER → DELAY → REVERB — all editable,
   also per timeline section. STUTTER does repeats, gates, tape stops, reverse, half speed and quick rolls (1/16 to 1/64, triplets, speeding up, slowing down, rising ripples).
 - **TIMELINE page**: fade between up to 32 sounds over the length of the sample, with fade length, curve, tails and preview buttons.
-- **Files**: WAV, AIFF, FLAC, MP3, OGG, Opus, M4A/AAC, ALAC, WMA, and the audio of MP4, MOV, MKV, WEBM, AVI and WMV videos.
+- **Files** (LOAD or drag and drop): WAV, AIFF, FLAC, MP3, OGG, Opus, M4A/AAC, ALAC, WMA, and the audio of MP4, MOV, MKV, WEBM, AVI and WMV videos.
 - **Playback**: loop or one-shot; click the waveform to play from there, right-click to move start/end; MIDI keys transpose or retrigger.
 - **ORIGINAL** for instant A/B, DRY/WET, output level, SURPRISE for a random sound.
 - **EXPORT WAV / drag to DAW**: renders the sample plus its effect tail in the background, ready by the time you drag.
@@ -48,7 +52,7 @@ Requirements: `git`, a C++17 compiler, Python 3 with `reportlab` (manual), and f
 ```bash
 git clone https://github.com/qouinn/Lumen.git && cd Lumen
 bash build.sh windows             # first run also fetches DPF + dr_libs (deps.sh) -> bin/windows/Lumen.vst3, Lumen.clap
-bash installer/make_installer.sh  # -> dist/Lumen-1.4-Windows-Setup.exe
+bash installer/make_installer.sh  # -> dist/Lumen-1.5-Windows-Setup.exe
 bash build.sh linux               # -> bin/linux (builds and passes the tests; not tried in a Linux DAW)
 ```
 
@@ -57,7 +61,7 @@ GitHub Actions builds the installer on every push and attaches it to the release
 ## Tests
 
 ```bash
-# engine: ORIGINAL is bit-exact, loop/keys, all 219 sounds stable with every macro at 0 and 1, level matching,
+# engine: ORIGINAL is bit-exact, loop/keys, all 267 sounds stable with every macro at 0 and 1, level matching,
 # a duplicate check (every sound is compared with every other by recipe and by a rendered fingerprint), timeline fades, CPU
 g++ -std=gnu++17 -O2 -Iplugins/Shared -Iplugins/Lumen -Idpf/distrho plugins/Lumen/tests/test_lumen.cpp plugins/Shared/Export.cpp -o build/test_lumen
 build/test_lumen build/out
@@ -74,6 +78,8 @@ xvfb-run -s "-screen 0 1300x900x24" build/lumen_host_test bin/linux/Lumen.clap s
 x86_64-w64-mingw32-g++ -std=gnu++17 -O2 -Idpf/distrho/src plugins/Lumen/tests/clap_gui_win.cpp -static -lole32 -lshell32 -luuid -lgdi32 -o build/test/clap_gui_win.exe
 # also: GFH_SETSCALE=1.5 (host announces 150 %), GFH_DPIAWARE=1, SCREEN=1366x768 (small screen)
 bash plugins/Lumen/tests/run_lumen_win_gui.sh 1 build/out
+# drag and drop: GFH_DRAGIN='C:\path\to\file.wav' opens a source window at (1100, 600) that drags that file when pressed;
+# GFH_STATEKEY=sample prints the sample the plugin has loaded at the end
 ```
 
 ## Making sounds
