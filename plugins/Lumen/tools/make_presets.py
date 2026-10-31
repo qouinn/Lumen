@@ -776,6 +776,171 @@ preset(C, 'Glass Harmonica', 'The sample played on singing wine glasses: pure, a
        [('GLASS', [('f_res', 0.1, 0.5)]), ('BLOOM', [('g_mix', 0.0, 1.0)]), ('SHINE', [('f_cut', 700, 3000)]), SPACE])
 
 # =============================================================================================
+# 1.5: sounds Lumen could not make before, with four new engine parts:
+#      FILTER COMB (a resonator tuned to a note), FILTER VOWEL (a talking formant filter),
+#      DRIVE RECTIFY (octave-up fuzz) and MOD SHIFT (frequency shifter: everything moves by the same number of Hz)
+NEW_FROM = len(P)
+def comb(cut=220, res=0.8, rate=0.3, depth=0.0, env=0.0): return filt(4, cut, res, rate, depth, env)
+def vowel(cut=300, res=0.5, rate=0.4, depth=0.4, env=0.0): return filt(5, cut, res, rate, depth, env)
+def shift(depth=0.6, rate=2.0, fb=0.0, mix=0.6): return mod(7, rate, depth, fb, mix)
+SHIMMER = ('SHIMMER', [('r_shim', 0.0, 0.7)])
+SPIRAL = ('SPIRAL', [('m_fb', 0.0, 0.85)])
+
+# -- resonators: the sample rings like strings, metal or a tuned room
+preset(12, 'Sympathetic Strings', 'Every sound makes a set of strings ring along, like the hidden strings of a sitar.',
+       M(comb(110, 0.86), rev(0.3, 0.6, 3.5, 0.4)),
+       [('RING', [('f_res', 0.5, 0.97)]), ('NOTE', [('f_cut', 55, 440)]), SPACE, SHIMMER])
+preset(5, 'Steel Pan Echo', 'A bright, tuned metal ring that echoes left and right.',
+       M(comb(330, 0.78), dly(4, 0.35, 0.25), rev(0.2, 0.5, 2.0)),
+       [('RING', [('f_res', 0.4, 0.95)]), ('NOTE', [('f_cut', 165, 880)]), ECHO, SPACE])
+preset(1, 'Tuned Room', 'A room that hums one low note under everything you play into it.',
+       M(comb(82, 0.62, env=0.2), rev(0.55, 0.85, 6.0, 0.5)),
+       [('HUM', [('f_res', 0.3, 0.9)]), ('NOTE', [('f_cut', 41, 165)]), SPACE, ('DARK', [('r_damp', 0.2, 0.9)])])
+preset(12, 'Harp Body', 'Loud moments pluck a harp string that follows the dynamics of the sample.',
+       M(comb(196, 0.9, env=0.35), rev(0.3, 0.6, 3.0, 0.3)),
+       [('PLUCK', [('f_env', 0.0, 0.8)]), ('NOTE', [('f_cut', 98, 392)]), ('SUSTAIN', [('f_res', 0.6, 0.98)]), SPACE])
+preset(11, 'Metal Pipe', 'Clangy, ringing metal tube with a slow jet sweep.',
+       M(comb(600, 0.95), mod(1, 0.12, 0.6, 0.4, 0.5), rev(0.25, 0.5, 2.5)),
+       [('CLANG', [('f_res', 0.6, 0.98)]), ('PIPE', [('f_cut', 200, 1600)]), ('SWEEP', [('m_mix', 0.0, 0.9)]), SPACE])
+preset(0, 'Karplus Rain', 'Each grain becomes a plucked note: a drizzle of tiny strings.',
+       M(grn(0.9, 40, 22, 0, 0.6, 0.1, 0.4), comb(262, 0.9), rev(0.35, 0.6, 3.5)),
+       [('RAIN', [('g_dens', 5, 50)]), ('NOTE', [('f_cut', 131, 523)]), ('RING', [('f_res', 0.6, 0.97)]), SPACE])
+preset(10, 'Resonant Chant', 'A deep monk drone rings an octave down under the sample.',
+       M(comb(65, 0.92), pit(-12, 0, 0.4, 0.0, 1.0), rev(0.45, 0.9, 8.0, 0.6)),
+       [('CHANT', [('f_res', 0.6, 0.97)]), ('LOW', [('p_mix_a', 0.0, 0.8)]), ('NOTE', [('f_cut', 41, 131)]), SPACE])
+preset(6, 'Comb Sweep', 'A tuned resonance glides up and down: a pitched jet swoosh.',
+       M(comb(300, 0.82, 0.08, 0.55), rev(0.2, 0.5, 2.0)),
+       [('SWEEP', [('f_depth', 0.0, 0.9)]), ('SPEED', [('f_rate', 0.03, 1.5)]), ('RING', [('f_res', 0.4, 0.95)]), SPACE])
+preset(9, 'Glass Harp', 'Wet fingers on glass rims: a high, pure ring that blooms into a shimmering hall.',
+       M(comb(523, 0.86), rev(0.45, 0.8, 6.0, 0.3, 0.45)),
+       [('RING', [('f_res', 0.5, 0.96)]), ('NOTE', [('f_cut', 262, 1047)]), GLOW, SPACE])
+preset(7, 'Sitar Buzz', 'A buzzing, nasal string ring like a sitar\'s bridge.',
+       M(comb(147, 0.88), drv(2, 0.35, 0.7, 0.8), rev(0.2, 0.5, 2.0)),
+       [('BUZZ', [('d_amt', 0.0, 0.8)]), ('NOTE', [('f_cut', 73, 294)]), ('RING', [('f_res', 0.6, 0.97)]), SPACE])
+preset(10, 'Bell Tower', 'Heavy bells: a low ring pushed off-key so it shimmers like cast metal.',
+       M(comb(98, 0.9), shift(0.75, 4.0, 0.0, 0.5), rev(0.5, 0.9, 9.0, 0.5)),
+       [('BELL', [('m_mix', 0.0, 0.9)]), ('RING', [('f_res', 0.6, 0.97)]), ('NOTE', [('f_cut', 49, 196)]), SPACE])
+
+# -- vowels: the sample talks
+preset(6, 'Talking Sample', 'The sound slowly says a - e - i - o - u.',
+       M(vowel(400, 0.55, 0.35, 0.5), rev(0.15, 0.4, 1.5)),
+       [('TALK', [('f_depth', 0.0, 0.9)]), ('SPEED', [('f_rate', 0.05, 3.0)]), ('VOWEL', [('f_cut', 150, 1500)]), ('NASAL', [('f_res', 0.1, 0.9)])])
+preset(6, 'Wah Words', 'Louder moments open the mouth: the sample speaks with its own dynamics.',
+       M(vowel(200, 0.6, 0.3, 0.0, 0.8), drv(0, 0.2, 0.6, 0.6)),
+       [('SPEAK', [('f_env', 0.0, 1.0)]), ('MOUTH', [('f_cut', 150, 900)]), ('NASAL', [('f_res', 0.1, 0.9)]), ('GRIT', [('d_amt', 0.0, 0.7)])])
+preset(11, 'Robot Speech', 'A metallic robot voice made from any sound.',
+       M(vowel(500, 0.5, 1.5, 0.45), mod(5, 0.8, 0.5, 0, 0.5), lofi(9, 14000)),
+       [('ROBOT', [('m_mix', 0.0, 0.9)]), ('WORDS', [('f_rate', 0.2, 6.0)]), ('BITS', [('l_bits', 14, 5)]), ('VOWEL', [('f_cut', 150, 1500)])])
+preset(12, 'Choir of One', 'The sample sings "ooh" and "aah" in a slow, wide choir.',
+       M(vowel(250, 0.65, 0.06, 0.35), mod(0, 0.4, 0.6, 0.2, 0.6), pit(12, 0, 0.3, 0.0, 1.0), rev(0.5, 0.85, 6.0, 0.5)),
+       [('CHOIR', [('m_mix', 0.0, 1.0), ('p_mix_a', 0.0, 0.5)]), ('VOWEL', [('f_cut', 150, 900)]), ('MOVE', [('f_depth', 0.0, 0.8)]), SPACE])
+preset(7, 'Yoi Bass', 'A growling, talking "yoi-yoi" wobble.',
+       M(drv(3, 0.55, 0.6, 1.0), vowel(250, 0.7, 3.0, 0.45)),
+       [('YOI', [('f_rate', 0.5, 8.0)]), ('DEPTH', [('f_depth', 0.1, 0.8)]), ('FUZZ', [('d_amt', 0.2, 0.9)]), ('MOUTH', [('f_cut', 150, 800)])])
+preset(9, 'Whisper Vowels', 'Airy, half-whispered vowels drifting through an old tape.',
+       M(vowel(350, 0.35, 0.1, 0.5), lofi(16, 48000, 0.25, 0.1, 0.25, 0.05, 0.2), rev(0.45, 0.75, 5.0, 0.4)),
+       [('BREATH', [('l_noise', 0.0, 0.8)]), ('VOWELS', [('f_depth', 0.0, 0.9)]), ('TAPE', [('l_wow', 0.0, 0.7)]), SPACE])
+preset(3, 'Talkbox Groove', 'A funky talkbox: chopped 1/8s that open and close their mouth.',
+       M(vowel(200, 0.6, 0.5, 0.2, 0.7), stut(1, 3, 0.6, 3)),
+       [('FUNK', [('f_env', 0.0, 1.0)]), ('CHOP', [('s_amt', 0.0, 1.0)]), ('MOUTH', [('f_cut', 150, 900)]), ('PATTERN', [('s_pat', 0, 7)])])
+preset(5, 'Didgeridoo', 'A low, circular-breathing drone: the sample an octave down with a rolling "oo-wa".',
+       M(pit(-12, 0, 0.6, 0.0, 0.4), vowel(170, 0.75, 1.4, 0.3), drv(0, 0.35, 0.4, 0.7)),
+       [('DRONE', [('p_mix_a', 0.2, 0.9)]), ('ROLL', [('f_rate', 0.4, 4.0)]), ('MOUTH', [('f_depth', 0.0, 0.7)]), ('GRIT', [('d_amt', 0.0, 0.8)])])
+preset(0, 'Speaking Clouds', 'A cloud of grains mumbling vowels to itself.',
+       M(grn(0.85, 180, 20, 0, 0.6, 0.2, 0.4), vowel(300, 0.5, 0.6, 0.6), rev(0.4, 0.7, 4.5)),
+       [('CLOUD', [('g_mix', 0.2, 1.0)]), ('MUMBLE', [('f_rate', 0.1, 4.0)]), ('VOWEL', [('f_cut', 150, 1200)]), SPACE])
+preset(2, 'Vocoder Dream', 'A frozen pad that slowly forms words.',
+       M(grn(1.0, 400, 18, 0, 0.4, 0.1, 0.2, 1), vowel(300, 0.55, 0.08, 0.6), rev(0.5, 0.85, 7.0, 0.5)),
+       [('WORDS', [('f_depth', 0.0, 0.9)]), ('SPEED', [('f_rate', 0.02, 0.6)]), ('HOLD', [('g_mix', 0.3, 1.0)]), SPACE])
+preset(4, 'Speak & Spell', 'An 8-bit toy that talks: crunchy vowels at a low sample rate.',
+       M(vowel(400, 0.55, 2.0, 0.5), lofi(6, 8000, 0, 0, 0.05)),
+       [('TALK', [('f_rate', 0.3, 8.0)]), ('BITS', [('l_bits', 10, 3)]), ('RATE', [('l_rate', 16000, 3000)]), ('VOWEL', [('f_cut', 150, 1500)])])
+preset(8, 'Bitten Vowels', 'Fast chattering vowels chopped into scattered rolls.',
+       M(vowel(400, 0.6, 8.0, 0.5), stut(5, 4, 0.45, 7), drv(1, 0.3, 0.6)),
+       [('CHATTER', [('f_rate', 2.0, 16.0)]), ('ROLLS', [('s_amt', 0.0, 0.9)]), ('BITE', [('d_amt', 0.0, 0.8)]), ('VOWEL', [('f_cut', 150, 1500)])])
+
+# -- octave fuzz
+preset(7, 'Octave Fuzz', 'Fuzz that adds the octave above: thick, buzzing and bright.',
+       M(drv(5, 0.55, 0.55, 1.0), lp(9000, 0.1)),
+       [('FUZZ', [('d_amt', 0.1, 0.9)]), ('TONE', [('d_tone', 0.1, 1.0)]), ('BLEND', [('d_mix', 0.2, 1.0)]), ('SOFTEN', [('f_cut', 18000, 2500)])])
+preset(5, 'Octave Organ', 'The octave above is added and slowly swirled, like a little organ.',
+       M(drv(5, 0.25, 0.4, 0.5), mod(0, 0.8, 0.55, 0.2, 0.6), rev(0.25, 0.5, 2.0)),
+       [('OCTAVE', [('d_mix', 0.0, 0.9)]), ('SWIRL', [('m_rate', 0.2, 6.0)]), ('BRIGHT', [('d_tone', 0.1, 0.9)]), SPACE])
+preset(10, 'Ghost Octave', 'A pale octave ghost floating above the sound in a dark hall.',
+       M(drv(5, 0.35, 0.3, 0.45), lp(4500, 0.2), rev(0.5, 0.9, 8.0, 0.6, 0.2)),
+       [('GHOST', [('d_mix', 0.0, 0.8)]), ('DARK', [('f_cut', 9000, 1500)]), GLOW, SPACE])
+preset(8, 'Rectified Breaks', 'Octave-fuzzed beats that break into fast rolls.',
+       M(drv(5, 0.6, 0.6, 0.9), stut(5, 3, 0.5, 1)),
+       [('FUZZ', [('d_amt', 0.2, 0.9)]), ('ROLLS', [('s_amt', 0.0, 0.9)]), ('ROLL', [('s_pat', 0, 3)]), ('BLEND', [('d_mix', 0.3, 1.0)])])
+preset(7, 'Buzzsaw', 'Octave fuzz through a hungry jet flanger.',
+       M(drv(5, 0.65, 0.7, 1.0), mod(1, 0.4, 0.7, 0.6, 0.6)),
+       [('SAW', [('d_amt', 0.2, 0.95)]), ('JET', [('m_mix', 0.0, 0.9)]), ('SPEED', [('m_rate', 0.05, 3.0)]), ('METAL', [('m_fb', 0.2, 0.9)])])
+
+# -- frequency shifting: spirals, bells, radios
+preset(11, 'Endless Rise', 'A spiral that keeps rising and never arrives.',
+       M(shift(0.56, 4.0, 0.75, 0.7), rev(0.3, 0.6, 3.0)),
+       [('RISE', [('m_depth', 0.51, 0.62)]), SPIRAL, ('BLEND', [('m_mix', 0.2, 1.0)]), SPACE])
+preset(11, 'Endless Fall', 'A spiral that keeps falling into the floor.',
+       M(shift(0.44, 4.0, 0.75, 0.7), rev(0.3, 0.6, 3.0, 0.6)),
+       [('FALL', [('m_depth', 0.49, 0.38)]), SPIRAL, ('BLEND', [('m_mix', 0.2, 1.0)]), SPACE])
+preset(6, 'Barber Pole', 'A phaser that only ever goes up.',
+       M(shift(0.53, 3.0, 0.6, 0.5)),
+       [('SPEED', [('m_rate', 0.5, 12.0)]), ('DEPTH', [('m_fb', 0.2, 0.85)]), ('BLEND', [('m_mix', 0.2, 0.7)]), ('DIRECTION', [('m_depth', 0.47, 0.53)])])
+preset(12, 'Inharmonic Bells', 'The sample turned into metal: every overtone moved off its place.',
+       M(shift(0.85, 6.0, 0.0, 0.55), rev(0.4, 0.75, 5.0, 0.3)),
+       [('METAL', [('m_depth', 0.6, 0.95)]), ('BELLS', [('m_mix', 0.2, 0.9)]), SPACE, GLOW])
+preset(4, 'Detuned Radio', 'A shortwave voice tuned slightly wrong, crackling through a small speaker.',
+       M(shift(0.3, 6.0, 0.0, 1.0), filt(2, 1500, 0.3), lofi(12, 16000, 0, 0.1, 0.15, 0.25, 0.4)),
+       [('DETUNE', [('m_depth', 0.45, 0.15)]), ('STATIC', [('l_noise', 0.0, 0.8), ('l_crackle', 0.0, 0.7)]), ('BAND', [('f_cut', 600, 3500)]), ('AGE', [('l_age', 0.0, 0.8)])])
+preset(11, 'Alien Choir', 'Voices from another planet: an octave choir with every partial bent.',
+       M(pit(12, -12, 0.4, 0.3, 0.8), shift(0.75, 8.0, 0.2, 0.6), rev(0.5, 0.85, 6.0, 0.4)),
+       [('ALIEN', [('m_depth', 0.55, 0.9)]), ('CHOIR', [('p_mix_a', 0.0, 0.8), ('p_mix_b', 0.0, 0.6)]), ('ECHOES', [('m_fb', 0.0, 0.6)]), SPACE])
+preset(1, 'Underwater Shift', 'Sinking: everything bends down a few Hz in a dark, deep room.',
+       M(shift(0.4, 8.0, 0.3, 0.8), lp(2500, 0.2), rev(0.45, 0.8, 5.0, 0.7)),
+       [('SINK', [('m_depth', 0.48, 0.3)]), ('MURK', [('f_cut', 6000, 600)]), ('SWIRL', [('m_fb', 0.0, 0.7)]), SPACE])
+preset(9, 'Spiral Staircase', 'Climbing a glittering staircase that never ends.',
+       M(shift(0.57, 5.0, 0.7, 0.6), rev(0.5, 0.8, 6.0, 0.3, 0.4)),
+       [('CLIMB', [('m_depth', 0.52, 0.65)]), SPIRAL, GLOW, SPACE])
+preset(10, 'Shepard Tension', 'Unbearable rising tension for the moment before the drop.',
+       M(shift(0.6, 6.0, 0.85, 0.75), dly(3, 0.4, 0.2), rev(0.4, 0.8, 5.0, 0.5)),
+       [('TENSION', [('m_fb', 0.4, 0.92)]), ('RISE', [('m_depth', 0.53, 0.7)]), ECHO, SPACE])
+preset(2, 'Frequency Chorus', 'A chorus with no wobble: two copies slowly drifting apart in pitch.',
+       M(shift(0.52, 10.0, 0.0, 0.5), rev(0.4, 0.7, 4.0)),
+       [('DRIFT', [('m_depth', 0.505, 0.56)]), ('BLEND', [('m_mix', 0.1, 0.7)]), SPACE, ('DECAY', [('r_decay', 1.5, 10.0)])])
+preset(7, 'Frequency Ring', 'Hard drive and a big frequency shift: clanging, metallic dirt.',
+       M(drv(1, 0.5, 0.6, 1.0), shift(0.95, 9.0, 0.0, 0.7)),
+       [('CLANG', [('m_depth', 0.7, 1.0)]), ('DIRT', [('d_amt', 0.1, 0.9)]), ('BLEND', [('m_mix', 0.2, 1.0)]), ('TONE', [('d_tone', 0.1, 1.0)])])
+preset(9, 'Dawn Chorus', 'Sparkling, slightly bent copies like birdsong over the sound.',
+       M(shift(0.7, 5.0, 0.3, 0.35), pit(12, 0, 0.25, 0.0, 1.0), rev(0.45, 0.75, 5.0, 0.3, 0.3)),
+       [('BIRDS', [('m_mix', 0.0, 0.7)]), ('HIGH', [('p_mix_a', 0.0, 0.6)]), GLOW, SPACE])
+
+# -- new mixes of everything
+preset(2, 'Resonant Freeze', 'A frozen moment ringing like a tuned string pad.',
+       M(grn(1.0, 300, 24, 0, 0.3, 0.2, 0.25, 1), comb(131, 0.85), rev(0.45, 0.85, 7.0, 0.5)),
+       [('HOLD', [('g_mix', 0.3, 1.0)]), ('NOTE', [('f_cut', 65, 262)]), ('RING', [('f_res', 0.5, 0.95)]), SPACE])
+preset(8, 'Tuned Glitch', 'Stutter rolls that ring at a pitch: glitches you can play in key.',
+       M(stut(5, 3, 0.55, 2), comb(220, 0.88)),
+       [('GLITCH', [('s_amt', 0.0, 1.0)]), ('NOTE', [('f_cut', 110, 440)]), ('RING', [('f_res', 0.5, 0.97)]), ('ROLL', [('s_pat', 0, 7)])])
+preset(3, 'Rubber Band', 'Twangy, bouncing plucks on every hit, chopped on the 1/16s.',
+       M(comb(165, 0.85, env=0.9), stut(1, 4, 0.5, 6)),
+       [('TWANG', [('f_env', 0.2, 1.0)]), ('CHOP', [('s_amt', 0.0, 1.0)]), ('NOTE', [('f_cut', 82, 330)]), ('PATTERN', [('s_pat', 0, 7)])])
+preset(8, 'Wobble Mouth', 'A fuzzed, gated wobble that talks back.',
+       M(drv(3, 0.6, 0.5, 1.0), vowel(220, 0.75, 2.0, 0.6), stut(1, 3, 0.7, 5)),
+       [('WOBBLE', [('f_rate', 0.5, 8.0)]), ('GATE', [('s_amt', 0.0, 1.0)]), ('FUZZ', [('d_amt', 0.2, 0.9)]), ('MOUTH', [('f_cut', 150, 800)])])
+preset(0, 'Kalimba Grains', 'Short grains plucking thumb-piano tines.',
+       M(grn(0.95, 45, 30, 12, 0.5, 0.0, 0.3), comb(523, 0.85), rev(0.3, 0.55, 2.5)),
+       [('PLINKS', [('g_dens', 8, 60)]), ('NOTE', [('f_cut', 262, 1047)]), ('RING', [('f_res', 0.6, 0.97)]), SPACE])
+preset(10, 'Haunted Music Box', 'A wobbly music box tuned slightly wrong, in an empty house.',
+       M(comb(784, 0.9), lofi(16, 48000, 0.45, 0.2, 0.08, 0.1, 0.2), shift(0.47, 3.0, 0.3, 0.4), rev(0.45, 0.8, 6.0, 0.5)),
+       [('WOBBLE', [('l_wow', 0.0, 0.9)]), ('OFF-KEY', [('m_mix', 0.0, 0.8)]), ('RING', [('f_res', 0.6, 0.97)]), SPACE])
+preset(4, 'Tape Monk', 'A low chant ringing on a warped old tape.',
+       M(comb(73, 0.88), lofi(16, 48000, 0.5, 0.25, 0.12, 0.08, 0.35), rev(0.3, 0.6, 3.5)),
+       [('CHANT', [('f_res', 0.6, 0.97)]), ('WARP', [('l_wow', 0.0, 1.0)]), ('AGE', [('l_age', 0.0, 0.8)]), ('NOTE', [('f_cut', 41, 147)])])
+preset(1, 'Frozen Cathedral Bells', 'A frozen moment ringing like distant bells under a cathedral roof.',
+       M(grn(0.7, 250, 24, 0, 0.5, 0.2, 0.3, 1), comb(392, 0.75), shift(0.66, 3.0, 0.0, 0.4), rev(0.45, 1.0, 12.0, 0.5)),
+       [('BELLS', [('m_mix', 0.0, 0.8)]), ('HOLD', [('g_mix', 0.2, 1.0)]), ('NOTE', [('f_cut', 196, 784)]), SPACE])
+
+# =============================================================================================
 def fmt(v):
     s = repr(float(v))
     return s + 'f' if ('.' in s or 'e' in s) else s + '.0f'
@@ -807,6 +972,7 @@ def main():
                                                                     ', '.join(ms), md, fmt(trims.get(i, 0.0))))
     out.append('};')
     out.append('constexpr int kNumPresets = %d;' % len(P))
+    out.append('constexpr int kFirstNew = %d;   // sounds added in the latest version (shown with a NEW badge until tried)' % NEW_FROM)
     out.append('')
     out.append('} // namespace lm')
     open(os.path.join(HERE, '..', 'LumenPresets.hpp'), 'w').write('\n'.join(out) + '\n')
