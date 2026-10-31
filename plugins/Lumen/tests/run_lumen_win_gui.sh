@@ -18,7 +18,7 @@ GOT=$(grep -o 'size=[0-9]*x[0-9]*' "$REPORT" | head -1 | cut -d= -f2)
 [ -n "$GOT" ] && S=$(python3 -c "w,h=map(int,'$GOT'.split('x')); print(min(w/1100,h/760))")
 echo "editor size $GOT -> click scale $S"
 c() { python3 -c "print(int(round($1*$S)), int(round($2*$S)))"; }
-xdotool mousemove $(c 111 361) click 1; sleep 0.6          # PADS & TEXTURES
+xdotool mousemove $(c 111 381) click 1; sleep 0.6          # PADS & TEXTURES (row 4: ALL, NEW, GRANULAR, SHIMMER, PADS)
 xdotool mousemove $(c 580 290) click 1; sleep 0.6          # 2nd sound
 xdotool mousemove $(c 815 372) mousedown 1; sleep 0.3; xdotool mousemove $(c 815 330); sleep 0.3; xdotool mousemove $(c 815 300); sleep 0.3; xdotool mouseup 1; sleep 0.5
 xdotool mousemove $(c 1009 211) click 1; sleep 0.8        # SAVE AS OWN PRESET (the macro was turned)

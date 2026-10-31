@@ -11,6 +11,9 @@
 #include "clap/ext/params.h"
 #include "clap/ext/gui.h"
 #include "clap/ext/timer-support.h"
+#include "clap/ext/state.h"
+#include <shlobj.h>
+#include <shellapi.h>
 #include <cstdio>
 #include <cstring>
 #include <cmath>
@@ -65,7 +68,60 @@ public:
     }
 };
 
-static LRESULT CALLBACK wndProc(HWND h, UINT m, WPARAM w, LPARAM l) { return DefWindowProcW(h, m, w, l); }
+// ---- a drag source (GFH_DRAGIN=file): pressing the mouse on it drags that file, like FL's browser or Explorer
+static std::wstring gDragIn;
+class SrcData : public IDataObject {
+    LONG refs = 1; HGLOBAL hd = nullptr;
+public:
+    explicit SrcData(const std::wstring& p) {
+        const SIZE_T bytes = sizeof(DROPFILES) + (p.size() + 2) * sizeof(wchar_t);
+        hd = GlobalAlloc(GHND, bytes); DROPFILES* df = (DROPFILES*)GlobalLock(hd); df->pFiles = sizeof(DROPFILES); df->fWide = TRUE;
+        memcpy((char*)df + sizeof(DROPFILES), p.c_str(), p.size() * sizeof(wchar_t)); GlobalUnlock(hd);
+    }
+    virtual ~SrcData() { GlobalFree(hd); }
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override { if (riid == IID_IUnknown || riid == IID_IDataObject) { *ppv = this; AddRef(); return S_OK; } *ppv = nullptr; return E_NOINTERFACE; }
+    ULONG STDMETHODCALLTYPE AddRef() override { return (ULONG)InterlockedIncrement(&refs); }
+    ULONG STDMETHODCALLTYPE Release() override { LONG r = InterlockedDecrement(&refs); if (!r) delete this; return (ULONG)r; }
+    static bool ok(const FORMATETC* f) { return f && f->cfFormat == CF_HDROP && (f->tymed & TYMED_HGLOBAL); }
+    HRESULT STDMETHODCALLTYPE GetData(FORMATETC* f, STGMEDIUM* m) override {
+        if (!ok(f)) return DV_E_FORMATETC;
+        const SIZE_T sz = GlobalSize(hd); HGLOBAL c = GlobalAlloc(GHND, sz); memcpy(GlobalLock(c), GlobalLock(hd), sz); GlobalUnlock(c); GlobalUnlock(hd);
+        m->tymed = TYMED_HGLOBAL; m->hGlobal = c; m->pUnkForRelease = nullptr; return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetDataHere(FORMATETC*, STGMEDIUM*) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE QueryGetData(FORMATETC* f) override { return ok(f) ? S_OK : DV_E_FORMATETC; }
+    HRESULT STDMETHODCALLTYPE GetCanonicalFormatEtc(FORMATETC*, FORMATETC* o) override { o->ptd = nullptr; return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE SetData(FORMATETC*, STGMEDIUM*, BOOL) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE EnumFormatEtc(DWORD dir, IEnumFORMATETC** e) override {
+        if (dir != DATADIR_GET) return E_NOTIMPL;
+        static FORMATETC fe = { CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+        return SHCreateStdEnumFmtEtc(1, &fe, e);
+    }
+    HRESULT STDMETHODCALLTYPE DAdvise(FORMATETC*, DWORD, IAdviseSink*, DWORD*) override { return OLE_E_ADVISENOTSUPPORTED; }
+    HRESULT STDMETHODCALLTYPE DUnadvise(DWORD) override { return OLE_E_ADVISENOTSUPPORTED; }
+    HRESULT STDMETHODCALLTYPE EnumDAdvise(IEnumSTATDATA**) override { return OLE_E_ADVISENOTSUPPORTED; }
+};
+class Src : public IDropSource {
+    LONG refs = 1;
+public:
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override { if (riid == IID_IUnknown || riid == IID_IDropSource) { *ppv = this; AddRef(); return S_OK; } *ppv = nullptr; return E_NOINTERFACE; }
+    ULONG STDMETHODCALLTYPE AddRef() override { return (ULONG)InterlockedIncrement(&refs); }
+    ULONG STDMETHODCALLTYPE Release() override { LONG r = InterlockedDecrement(&refs); if (!r) delete this; return (ULONG)r; }
+    HRESULT STDMETHODCALLTYPE QueryContinueDrag(BOOL esc, DWORD keys) override { if (esc) return DRAGDROP_S_CANCEL; if (!(keys & MK_LBUTTON)) return DRAGDROP_S_DROP; return S_OK; }
+    HRESULT STDMETHODCALLTYPE GiveFeedback(DWORD) override { return DRAGDROP_S_USEDEFAULTCURSORS; }
+};
+static FILE* gRep = nullptr;
+static LRESULT CALLBACK wndProc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    if (m == WM_LBUTTONDOWN && !gDragIn.empty() && GetPropW(h, L"gfsrc")) {
+        SrcData* d = new SrcData(gDragIn); Src* s = new Src(); DWORD eff = 0;
+        const HRESULT hr = DoDragDrop(d, s, DROPEFFECT_COPY, &eff);
+        if (gRep) { fprintf(gRep, "dragin=%s\n", hr == DRAGDROP_S_DROP ? "dropped" : "cancelled"); fflush(gRep); }
+        d->Release(); s->Release();
+        return 0;
+    }
+    return DefWindowProcW(h, m, w, l);
+}
 
 int main(int argc, char** argv)
 {
@@ -96,6 +152,12 @@ int main(int argc, char** argv)
     gParent = CreateWindowExW(0, L"gfhost", L"Lumen", WS_POPUP | WS_VISIBLE, 0, 0, 1000, 720, nullptr, nullptr, wc.hInstance, nullptr);
     HWND drop = CreateWindowExW(WS_EX_TOPMOST, L"gfhost", L"Drop", WS_POPUP | WS_VISIBLE, 1100, 900, 400, 200, nullptr, nullptr, wc.hInstance, nullptr);
     Target* tgt = new Target();
+    gRep = rep;
+    if (const char* di = getenv("GFH_DRAGIN")) {   // a source window at (1100, 600) that drags this file
+        wchar_t wb[1024]; MultiByteToWideChar(CP_UTF8, 0, di, -1, wb, 1024); gDragIn = wb;
+        HWND src = CreateWindowExW(WS_EX_TOPMOST, L"gfhost", L"DragSrc", WS_POPUP | WS_VISIBLE, 1100, 600, 300, 150, nullptr, nullptr, wc.hInstance, nullptr);
+        SetPropW(src, L"gfsrc", (HANDLE)1);
+    }
     const HRESULT rr = RegisterDragDrop(drop, tgt);
 
     gui->create(plug, CLAP_WINDOW_API_WIN32, false);
@@ -150,6 +212,12 @@ int main(int argc, char** argv)
         fprintf(rep, "peak=%g\n", peak);
     } else
     fprintf(rep, "mode=%g size=%g play=%g chops=%g env=%g region=%g peak=%g\n", val("Mode"), val("Chop 1 Size"), val("Play"), val("Chops"), val("Grain Envelope"), val("Region Start"), peak);
+    if (const char* sk = getenv("GFH_STATEKEY")) {   // the value of a saved state key (e.g. the loaded sample)
+        auto st = (const clap_plugin_state_t*)plug->get_extension(plug, CLAP_EXT_STATE);
+        struct B { std::string d; } b;
+        clap_ostream_t os = { &b, [](const clap_ostream_t* s, const void* buf, uint64_t n) -> int64_t { ((B*)s->ctx)->d.append((const char*)buf, (size_t)n); return (int64_t)n; } };
+        if (st && st->save(plug, &os)) { const std::string k = std::string(sk) + std::string(1, '\0'); size_t p = b.d.find(k); fprintf(rep, "%s=%s\n", sk, p == std::string::npos ? "?" : b.d.substr(p + k.size(), b.d.find('\0', p + k.size()) - p - k.size()).c_str()); }
+    }
     char dropped[1024] = { 0 }; WideCharToMultiByte(CP_UTF8, 0, gDropped.c_str(), -1, dropped, 1024, nullptr, nullptr);
     fprintf(rep, "dropped=%s\n", dropped);
     fclose(rep);

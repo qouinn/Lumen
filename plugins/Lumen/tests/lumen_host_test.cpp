@@ -156,7 +156,7 @@ int main(int argc, char** argv)
         std::printf("      gui %ux%u\n", w, h);
         auto xdo = [&](std::string a) { if (std::system(("xdotool " + a + " >/dev/null 2>&1").c_str())) {} pump(8); };
         auto shot = [&](const char* n) { std::string c = std::string("import -window root -crop ") + std::to_string(w) + "x" + std::to_string(h) + "+0+0 " + argv[3] + "_" + n + ".png"; if (std::system(c.c_str())) {} };
-        xdo("mousemove 111 333 click 1");                       // category SHIMMER & SPACE
+        xdo("mousemove 111 354 click 1");                       // category SHIMMER & SPACE (row 3: ALL, NEW, GRANULAR, SHIMMER)
         xdo("mousemove 340 336 click 1");                       // 3rd sound in it
         check(val("Macro Set") == 17, "click a sound in the browser loads it (" + std::to_string(val("Macro Set")) + ")");
         const double m1 = val("Macro 1");
