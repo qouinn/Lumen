@@ -25,26 +25,33 @@ def table(rows, widths, style=B):
                            ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6)]))
     return t
 
-story = [Paragraph("Lumen", TITLE), Paragraph("Sample effect instrument &mdash; user manual, version 1.4", S), Spacer(1, 4 * mm),
+story = [Paragraph("Lumen", TITLE), Paragraph("Sample effect instrument &mdash; user manual, version 1.5", S), Spacer(1, 4 * mm),
          Image(shot, width=165 * mm, height=165 * mm * 760 / 1100), Spacer(1, 3 * mm)]
 
 story += [Paragraph("What it is", H2), P(
-    "Lumen plays your sample through <b>219 effect sounds in 13 categories</b>, plus your own: "
+    "Lumen plays your sample through <b>267 effect sounds in 13 categories</b>, plus your own: "
     "granular clouds, shimmering spaces, pads, rhythmic glitches, tape and lo-fi, pitch and harmony, filter motion and drive, breakcore, dreamy, cinematic and sci-fi sounds &mdash; and <b>Beautiful Transforms</b>: "
-    "sounds that turn the sample into a choir, strings, glass, bells or wind chimes. "
+    "sounds that turn the sample into a choir, strings, glass, bells or wind chimes. Version 1.5 adds 48 sounds made with four new engine parts: tuned strings and bells (COMB), a talking filter that shapes your sample into vowels (VOWEL), octave fuzz (RECTIFY) and a frequency shifter that makes endless rising and falling spirals (SHIFT). "
     "Pick a sound, turn the four big knobs, and drag the result straight into FL Studio. "
-    "It is an instrument (it shows up in your instrument list, not under effects). VST3 and CLAP for Windows 10/11 (64-bit). "
+    "It is an instrument (it shows up with the instruments, not under effects). VST3 and CLAP for Windows 10/11 (64-bit). "
     "Loads WAV, AIFF, FLAC, MP3, OGG, Opus, M4A/AAC, ALAC and WMA, and the sound of video files (MP4, MOV, MKV, WEBM, AVI, WMV): "
     "drop a video and Lumen takes its audio.")]
 
+story += [Paragraph("New in 1.5", H2), P(
+    "<b>Drag and drop:</b> drag a sample from FL Studio's browser on the left (or from Explorer, the desktop, or anywhere else) straight onto the Lumen window. "
+    "The window lights up with <i>DROP TO LOAD</i>; let go and the sample is loaded. The sound you have chosen stays the same.<br/>"
+    "<b>48 new sounds</b> with four new engine parts (see EDIT below). The first time you open Lumen 1.5 it shows the new category <b>NEW IN 1.5</b>. "
+    "Every new sound has a <b>NEW</b> badge until you have tried it once, and categories that still hold untried sounds show their count in a small glowing pill. "
+    "Which sounds you have tried is kept in <font face='Courier'>Documents\\Lumen\\tried.txt</font>.")]
+
 story += [Paragraph("Install", H2), P(
-    "Run <b>Lumen-1.4-Windows-Setup.exe</b> (installing over any older Lumen is fine, and your projects keep their sounds; close your DAW first). It installs Lumen.vst3 to <font face='Courier'>C:\\Program Files\\Common Files\\VST3</font>, "
+    "Run <b>Lumen-1.5-Windows-Setup.exe</b> (installing over any older Lumen is fine, and your projects keep their sounds; close your DAW first). It installs Lumen.vst3 to <font face='Courier'>C:\\Program Files\\Common Files\\VST3</font>, "
     "Lumen.clap to <font face='Courier'>...\\Common Files\\CLAP</font> and this manual to <font face='Courier'>C:\\Program Files\\Lumen</font>. "
     "<b>FL Studio:</b> Options &rarr; Manage plugins &rarr; <i>Find installed plugins</i>; Lumen appears with the instruments (Generators). "
     "SmartScreen may warn because the installer isn't code-signed: <i>More info</i> &rarr; <i>Run anyway</i>.")]
 
 story += [Paragraph("Quick start", H2), P(
-    "1. Press <b>LOAD</b> and pick your sample (Lumen starts with a built-in piano-and-beat loop so you can try it right away).<br/>"
+    "1. <b>Drag a sample</b> from FL Studio's browser (or anywhere) onto Lumen, or press <b>LOAD</b> and pick it (Lumen starts with a built-in piano-and-beat loop so you can try it right away).<br/>"
     "2. Press <b>Play</b> (the round button at the top). The sample plays from start to end; with <b>LOOP ON</b> it repeats.<br/>"
     "3. Click a <b>category</b> on the left, then click a <b>sound</b>. You hear it immediately.<br/>"
     "4. Turn the <b>four big knobs</b> &mdash; their names change with every sound (e.g. SHIMMER, SIZE, WOBBLE, AGE).<br/>"
@@ -75,7 +82,8 @@ story += [Paragraph("The main screen", H2), table([
     ["LOOP", "On: the sample repeats (with a tiny crossfade so the loop doesn't click). Off: it plays once."],
     ["KEYS", "MIDI keys also play the sample. <b>PITCH</b>: like a sampler, C3 = original, other keys transpose. <b>TRIGGER</b>: every key "
              "plays it at the original pitch."],
-    ["Categories / sounds", "Thirteen categories (15 to 18 sounds each), OWN PRESETS, or ALL SOUNDS (scroll with the wheel). A dot marks the category of the current sound."],
+    ["Categories / sounds", "Thirteen categories (19 to 23 sounds each), NEW IN 1.5, OWN PRESETS, or ALL SOUNDS (scroll with the wheel). A dot marks the category of the current sound. "
+                            "<b>NEW</b> badges mark sounds you have not tried yet."],
     ["Four big knobs", "Each sound gives you four macros that change several settings at once. Double-click or right-click resets a knob to the sound's default."],
     ["DRY / WET, OUTPUT", "Blend dry/effect, and the overall volume. All sounds are level-matched so switching doesn't jump in loudness."],
     ["Chain (bottom row)", "The nine effect modules in signal order. Lit = on. Click one to switch it on or off."],
@@ -93,10 +101,13 @@ story += [table([
                 "SPREAD (how far back and how wide), REVERSE (share of backwards grains), JITTER (random timing, pitch and octave jumps), "
                 "FREEZE (holds the moment forever)."],
     ["2 PITCH", "Two pitch-shifted copies: VOICE A/B (&plusmn;24 semitones) with their LEVELs, plus DRY. Octaves, fifths and chords."],
-    ["3 DRIVE", "SOFT, HARD, FOLD, FUZZ or TUBE distortion with AMOUNT, TONE and MIX. Level is compensated automatically."],
-    ["4 FILTER", "LP / HP / BP / NOTCH with CUTOFF and RESO, an LFO (RATE, DEPTH) and ENVELOPE (opens with loudness, or closes when negative)."],
+    ["3 DRIVE", "SOFT, HARD, FOLD, FUZZ, TUBE or RECTIFY (octave-up fuzz) distortion with AMOUNT, TONE and MIX. Level is compensated automatically."],
+    ["4 FILTER", "LP / HP / BP / NOTCH with CUTOFF and RESO, an LFO (RATE, DEPTH) and ENVELOPE (opens with loudness, or closes when negative). "
+                 "<b>COMB</b> tunes the sound like a plucked string or bell: CUTOFF picks the note (shown as e.g. A2 &middot; 110 Hz), RESO how long it rings. "
+                 "<b>VOWEL</b> makes the sample talk: CUTOFF slides through a-e-i-o-u, and the LFO and ENVELOPE make it speak by themselves."],
     ["5 LO-FI", "BITS and RATE (bitcrush, sample-rate reduction), WOW and FLUTTER (tape wobble), HISS, CRACKLE (vinyl) and AGE (old-speaker band limit)."],
-    ["6 MOD", "CHORUS, FLANGER, PHASER, TREMOLO, PAN, RING (robot) or VIBRATO with RATE, DEPTH, FEEDBACK and MIX."],
+    ["6 MOD", "CHORUS, FLANGER, PHASER, TREMOLO, PAN, RING (robot), VIBRATO or <b>SHIFT</b> with RATE, DEPTH, FEEDBACK and MIX. "
+              "SHIFT moves every frequency up (DEPTH above the middle) or down (below) by the same number of Hz: metallic, inharmonic, and with FEEDBACK an endless rising or falling spiral."],
     ["7 STUTTER", "Tempo-synced: REPEAT (repeats the last piece), GATE (rhythmic chopping, 8 patterns), TAPE STOP, REVERSE (pieces play backwards), "
                   "HALF (half speed) and STUTTER (quick rolls; PATTERN picks 1/16, 1/32 or 1/64 rolls, triplets, speeding up, slowing down, RIPPLE (rising steps) or SCATTER). DIVISION sets the piece length, AMOUNT how often (or how deep for GATE)."],
     ["8 DELAY", "Tempo-synced echo (1/32 to 1/1, dotted values), FEEDBACK, TONE, WOBBLE, MIX and PING-PONG."],
@@ -140,13 +151,14 @@ story += [Paragraph("Tips and troubleshooting", H2), P(
     "<b>No sound:</b> press Play or play a key (C3 = original). Check DRY / WET and OUTPUT. "
     "<b>Too much effect:</b> lower DRY / WET, or compare with ORIGINAL. <b>Clicks at the loop point:</b> move the start/end handles to quieter spots. "
     "<b>Project reload:</b> the sample path is saved with the project, so keep the file where it is. "
+    "<b>Drop does nothing:</b> drop audio or video files only (folders and other files are ignored). If FL Studio runs as administrator, Windows blocks dragging from Explorer into it; dragging from FL's own browser still works. "
     "Renders go to <font face='Courier'>Documents\\Grainfield Renders</font>.")]
 
 # ---- all sounds
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'plugins', 'Lumen', 'LumenPresets.hpp')).read()
 cats = ["Granular", "Shimmer & Space", "Pads & Textures", "Rhythm & Glitch", "Lo-Fi & Tape", "Pitch & Harmony", "Filter & Motion", "Drive & Character", "Breakcore & Chaos", "Dreamy & Nostalgic", "Cinematic & Dark", "Sci-Fi & Experimental", "Beautiful Transforms"]
 items = re.findall(r'\{ "((?:[^"\\]|\\.)*)", (\d+), "((?:[^"\\]|\\.)*)", kPV', src)
-story += [CondPageBreak(60 * mm), Paragraph("All 219 sounds", H2)]
+story += [CondPageBreak(60 * mm), Paragraph("All %d sounds" % len(items), H2)]
 for c, cname in enumerate(cats):
     rows = [["Sound", "What it is"]] + [[n, d.replace('\\"', '"')] for n, cc, d in items if int(cc) == c]
     story += [CondPageBreak(40 * mm), Paragraph(cname, H3), table(rows, [42 * mm, 128 * mm], S)]
@@ -157,7 +169,7 @@ story += [Paragraph("Credits", H2), Paragraph(
 
 def bg(c, d):
     c.saveState(); c.setFillColor(ACC); c.rect(0, A4[1] - 6, A4[0], 6, stroke=0, fill=1)
-    c.setFont("Helvetica", 8); c.setFillColor(DIM); c.drawRightString(A4[0] - 20 * mm, 10 * mm, "Lumen 1.4  \u00b7  page %d" % d.page); c.restoreState()
+    c.setFont("Helvetica", 8); c.setFillColor(DIM); c.drawRightString(A4[0] - 20 * mm, 10 * mm, "Lumen 1.5  \u00b7  page %d" % d.page); c.restoreState()
 
 SimpleDocTemplate(out, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=15 * mm, bottomMargin=15 * mm,
                   title="Lumen Manual", author="Grainfield Audio").build(story, onFirstPage=bg, onLaterPages=bg)
