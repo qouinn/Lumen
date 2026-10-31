@@ -241,6 +241,77 @@ public:
 
 bool canDragFiles() { return true; }
 
+// ------------------------------------------------------------------------------------------
+// drop target: accepts CF_HDROP (Explorer, FL Studio's browser, ...) on the plugin window
+struct FileDropTarget : public IDropTarget {
+    LONG refs = 1; HWND hwnd = nullptr; bool oleInit = false;
+    volatile LONG hover = 0;
+    CRITICAL_SECTION cs; std::string dropped; bool have = false;
+    FileDropTarget() { InitializeCriticalSection(&cs); }
+    virtual ~FileDropTarget() { DeleteCriticalSection(&cs); }
+    static bool hasFiles(IDataObject* d) { FORMATETC f = { CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL }; return d && d->QueryGetData(&f) == S_OK; }
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
+        if (riid == IID_IUnknown || riid == IID_IDropTarget) { *ppv = static_cast<IDropTarget*>(this); AddRef(); return S_OK; }
+        *ppv = nullptr; return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return (ULONG)InterlockedIncrement(&refs); }
+    ULONG STDMETHODCALLTYPE Release() override { const LONG r = InterlockedDecrement(&refs); if (r == 0) delete this; return (ULONG)r; }
+    HRESULT STDMETHODCALLTYPE DragEnter(IDataObject* d, DWORD, POINTL, DWORD* eff) override {
+        const bool ok = hasFiles(d); InterlockedExchange(&hover, ok ? 1 : 0); *eff = ok ? DROPEFFECT_COPY : DROPEFFECT_NONE; return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE DragOver(DWORD, POINTL, DWORD* eff) override { *eff = hover ? DROPEFFECT_COPY : DROPEFFECT_NONE; return S_OK; }
+    HRESULT STDMETHODCALLTYPE DragLeave() override { InterlockedExchange(&hover, 0); return S_OK; }
+    HRESULT STDMETHODCALLTYPE Drop(IDataObject* d, DWORD, POINTL, DWORD* eff) override {
+        InterlockedExchange(&hover, 0);
+        *eff = DROPEFFECT_NONE;
+        FORMATETC f = { CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL }; STGMEDIUM m = {};
+        if (!d || d->GetData(&f, &m) != S_OK) return S_OK;
+        HDROP hd = (HDROP)GlobalLock(m.hGlobal);
+        if (hd) {
+            const UINT len = DragQueryFileW(hd, 0, nullptr, 0);
+            if (len > 0) {
+                std::wstring w((size_t)len + 1, L'\0'); DragQueryFileW(hd, 0, &w[0], len + 1); w.resize(len);
+                EnterCriticalSection(&cs); dropped = narrow(w.c_str()); have = true; LeaveCriticalSection(&cs);
+                *eff = DROPEFFECT_COPY;
+            }
+            GlobalUnlock(m.hGlobal);
+        }
+        ReleaseStgMedium(&m);
+        return S_OK;
+    }
+};
+
+FileDropTarget* registerFileDrop(uintptr_t pluginWindow)
+{
+    HWND h = (HWND)pluginWindow;
+    if (!h) return nullptr;
+    FileDropTarget* t = new FileDropTarget();
+    t->hwnd = h;
+    t->oleInit = SUCCEEDED(OleInitialize(nullptr));   // S_FALSE when the host already did it
+    if (RegisterDragDrop(h, t) != S_OK) {
+        RevokeDragDrop(h);   // something else held it (or a previous editor): take it over
+        if (RegisterDragDrop(h, t) != S_OK) { if (t->oleInit) OleUninitialize(); t->Release(); return nullptr; }
+    }
+    return t;
+}
+void unregisterFileDrop(FileDropTarget* t)
+{
+    if (!t) return;
+    RevokeDragDrop(t->hwnd);
+    const bool ole = t->oleInit;
+    t->Release();
+    if (ole) OleUninitialize();
+}
+bool fileDropHover(const FileDropTarget* t) { return t && t->hover != 0; }
+bool takeDroppedFile(FileDropTarget* t, std::string& utf8Path)
+{
+    if (!t) return false;
+    EnterCriticalSection(&t->cs);
+    const bool h = t->have; if (h) { utf8Path = t->dropped; t->have = false; }
+    LeaveCriticalSection(&t->cs);
+    return h;
+}
+
 bool dragFileOut(const std::string& utf8Path)
 {
     const HRESULT init = OleInitialize(nullptr); // S_FALSE if already initialised on this thread
@@ -300,6 +371,11 @@ void revealFile(const std::string& utf8Path)
 
 bool canDragFiles() { return false; }
 bool dragFileOut(const std::string&) { return false; }
+struct FileDropTarget {};
+FileDropTarget* registerFileDrop(uintptr_t) { return nullptr; }
+void unregisterFileDrop(FileDropTarget*) {}
+bool fileDropHover(const FileDropTarget*) { return false; }
+bool takeDroppedFile(FileDropTarget*, std::string&) { return false; }
 void returnKeyboardFocus(uintptr_t) {}
 double windowDpiScale(uintptr_t) { return 0.0; }
 bool screenWorkArea(uintptr_t, int& width, int& height)

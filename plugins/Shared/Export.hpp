@@ -40,4 +40,12 @@ double windowDpiScale(uintptr_t pluginWindow);
 // Usable screen area (without the taskbar) of the monitor the window is on, in the window's own pixels. False if unknown.
 bool screenWorkArea(uintptr_t pluginWindow, int& width, int& height);
 
+// Files dropped onto the plugin window from Explorer, FL Studio's browser or any other app (Windows).
+// registerFileDrop returns nullptr where it is not supported; poll the other two from the UI's idle callback.
+struct FileDropTarget;
+FileDropTarget* registerFileDrop(uintptr_t pluginWindow);
+void unregisterFileDrop(FileDropTarget* t);
+bool fileDropHover(const FileDropTarget* t);                       // a file is being dragged over the window right now
+bool takeDroppedFile(FileDropTarget* t, std::string& utf8Path);     // the file that was dropped (once)
+
 } // namespace gf
