@@ -1,10 +1,10 @@
-; Lumen 1.4 — Windows installer (NSIS)
+; Lumen 1.5 — Windows installer (NSIS)
 Unicode true
 SetCompressor /SOLID lzma
 ManifestDPIAware true
 
 !define APPNAME   "Lumen"
-!define VERSION   "1.4.0"
+!define VERSION   "1.5.0"
 !define PUBLISHER "Grainfield Audio"
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Lumen"
 !ifndef BINDIR
@@ -14,7 +14,7 @@ ManifestDPIAware true
   !define PAYLOAD "..\dist\payload-lumen"
 !endif
 !ifndef OUTFILE
-  !define OUTFILE "..\dist\Lumen-1.4-Windows-Setup.exe"
+  !define OUTFILE "..\dist\Lumen-1.5-Windows-Setup.exe"
 !endif
 
 Name "${APPNAME} ${VERSION}"
@@ -23,7 +23,7 @@ InstallDir "$PROGRAMFILES64\${APPNAME}"
 RequestExecutionLevel admin
 BrandingText "${APPNAME} ${VERSION} - ${PUBLISHER}"
 
-VIProductVersion "1.4.0.0"
+VIProductVersion "1.5.0.0"
 VIAddVersionKey "ProductName" "${APPNAME}"
 VIAddVersionKey "CompanyName" "${PUBLISHER}"
 VIAddVersionKey "FileDescription" "${APPNAME} sample effect instrument installer"
@@ -39,7 +39,7 @@ VIAddVersionKey "LegalCopyright" "(c) 2026 ${PUBLISHER}"
 !define MUI_UNICON "lumen.ico"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Install Lumen ${VERSION}"
-!define MUI_WELCOMEPAGE_TEXT "Lumen is a sample effect instrument: load one sound and play it through 219 effect presets in 13 categories plus your own - granular clouds, shimmer, tape, glitch, breakcore, dreamy, cinematic, sci-fi, beautiful transforms and more - shaped with four big knobs.$\r$\n$\r$\nThis will install the VST3 and CLAP plugins for 64-bit Windows. Installing over an older Lumen is fine - your projects keep their sounds.$\r$\n$\r$\nClose your DAW before continuing."
+!define MUI_WELCOMEPAGE_TEXT "Lumen is a sample effect instrument: load one sound and play it through 267 effect presets in 13 categories plus your own - granular clouds, shimmer, tape, glitch, breakcore, dreamy, cinematic, sci-fi, beautiful transforms and more - shaped with four big knobs. Drag a sample from FL Studio's browser straight onto it.$\r$\n$\r$\nThis will install the VST3 and CLAP plugins for 64-bit Windows. Installing over an older Lumen is fine - your projects keep their sounds.$\r$\n$\r$\nClose your DAW before continuing."
 !define MUI_COMPONENTSPAGE_SMALLDESC
 !define MUI_FINISHPAGE_TITLE "Lumen is installed"
 !define MUI_FINISHPAGE_TEXT "Rescan plugins in your DAW.$\r$\n$\r$\nFL Studio: Options > Manage plugins > Find installed plugins. Lumen appears under Generators."
