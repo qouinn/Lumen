@@ -91,12 +91,15 @@ constexpr int kTiles = 20;   // 4 x 5 sounds per category in the timeline picker
 inline Rect tileT(int i) { const float w = (676.0f - 18) / 4.0f; return { 28 + (i % 4) * (w + 6), 536 + (i / 4) * 29.5f, w, 26 }; }
 inline constexpr const char* kCatShort[] = { "GRAIN", "SPACE", "PADS", "RHYTHM", "LO-FI", "PITCH", "FILTER", "DRIVE", "BREAK", "DREAM", "CINEMA", "SCI-FI", "TRANSFORM", "OWN" };
 constexpr int kUiCats = kNumCats + 1;   // the built-in categories + OWN PRESETS
-inline const char* catName(int c) { return c == kOwnCat ? "OWN PRESETS" : kCatNames[c < 0 ? 0 : (c >= kNumCats ? kNumCats - 1 : c)]; }
+constexpr int kNewCat = -2;              // "NEW IN 1.5": the sounds added in this version
+constexpr int kCatRows = kUiCats + 2;    // ALL, NEW, the categories, OWN
+inline const char* catName(int c) { return c == kOwnCat ? "OWN PRESETS" : c == kNewCat ? "NEW IN 1.5" : kCatNames[c < 0 ? 0 : (c >= kNumCats ? kNumCats - 1 : c)]; }
+inline int rowCat(int i) { return i == 0 ? -1 : i == 1 ? kNewCat : (i <= kNumCats + 1 ? i - 2 : kOwnCat); }
 constexpr Rect rSaveOwn   { 934, 198, 150, 26 };   // SAVE AS OWN PRESET (tabs row, shown when the sound was edited)
 constexpr Rect rNameBox   { 726, 230, 358, 96 };   // name entry for a new own preset
 enum Page { kPageSounds = 0, kPageEdit, kPageTimeline };
 
-inline Rect catRow(int i) { return { rCats.x + 8, rCats.y + 32 + i * 28.0f, rCats.w - 16, 25 }; }   // i = 0 ALL, 1..13 categories, 14 OWN
+inline Rect catRow(int i) { return { rCats.x + 8, rCats.y + 31 + i * 26.4f, rCats.w - 16, 24 }; }   // i = 0 ALL, 1 NEW, 2..14 categories, 15 OWN
 inline Rect chip(int m) { const float w = (rChain.w - 16 - 8 * 6) / 9.0f; return { rChain.x + 8 + m * (w + 6), rChain.y + 8, w, rChain.h - 16 }; }
 inline Rect modCard(int m) { const float w = (1068.0f - 2 * 9) / 3.0f, h = (456.0f - 2 * 9) / 3.0f; return { 16 + (m % 3) * (w + 9), 232 + (m / 3) * (h + 9), w, h }; }
 inline Rect macroKnob(int m) { return { m % 2 == 0 ? 815.0f : 995.0f, m < 2 ? 372.0f : 506.0f, 34, 0 }; }
@@ -106,10 +109,10 @@ struct ModLayout { int seg; const char* const* segNames; int segN; uint32_t knob
 const ModLayout kLayouts[9] = {
     { -1, nullptr, 0, { kGMix, kGSize, kGDens, kGPitch, kGSpread, kGRev, kGJit }, 7, { "MIX", "SIZE", "DENSITY", "PITCH", "SPREAD", "REVERSE", "JITTER" }, (int)kGFreeze, "FREEZE" },
     { -1, nullptr, 0, { kPA, kPMixA, kPB, kPMixB, kPDry }, 5, { "VOICE A", "LEVEL A", "VOICE B", "LEVEL B", "DRY" }, -1, nullptr },
-    { (int)kDMode, kDriveNames, 5, { kDAmt, kDTone, kDMix }, 3, { "AMOUNT", "TONE", "MIX" }, -1, nullptr },
-    { (int)kFType, kFilterNames, 4, { kFCut, kFRes, kFRate, kFDepth, kFEnv }, 5, { "CUTOFF", "RESO", "LFO RATE", "LFO DEPTH", "ENVELOPE" }, -1, nullptr },
+    { (int)kDMode, kDriveNames, 6, { kDAmt, kDTone, kDMix }, 3, { "AMOUNT", "TONE", "MIX" }, -1, nullptr },
+    { (int)kFType, kFilterNames, 6, { kFCut, kFRes, kFRate, kFDepth, kFEnv }, 5, { "CUTOFF", "RESO", "LFO RATE", "LFO DEPTH", "ENVELOPE" }, -1, nullptr },
     { -1, nullptr, 0, { kLBits, kLRate, kLWow, kLFlutter, kLNoise, kLCrackle, kLAge }, 7, { "BITS", "RATE", "WOW", "FLUTTER", "HISS", "CRACKLE", "AGE" }, -1, nullptr },
-    { (int)kMType, kModNames, 7, { kMRate, kMDepth, kMFb, kMMix }, 4, { "RATE", "DEPTH", "FEEDBACK", "MIX" }, -1, nullptr },
+    { (int)kMType, kModNames, 8, { kMRate, kMDepth, kMFb, kMMix }, 4, { "RATE", "DEPTH", "FEEDBACK", "MIX" }, -1, nullptr },
     { (int)kSMode, kStutNames, 6, { kSDiv, kSPat, kSAmt, kSMix }, 4, { "DIVISION", "PATTERN", "AMOUNT", "MIX" }, -1, nullptr },
     { -1, nullptr, 0, { kYDiv, kYFb, kYTone, kYMod, kYMix }, 5, { "TIME", "FEEDBACK", "TONE", "WOBBLE", "MIX" }, (int)kYPing, "PING-PONG" },
     { -1, nullptr, 0, { kRSize, kRDecay, kRDamp, kRPre, kRShim, kRMod, kRMix }, 7, { "SIZE", "DECAY", "DAMPING", "PREDELAY", "SHIMMER", "MOTION", "MIX" }, -1, nullptr },
@@ -138,13 +141,17 @@ public:
         fSample = std::make_shared<SampleData>(); makeLumenSource(*fSample, 44100.0); fName = "Built-in \xC2\xB7 piano & beat"; fBuiltin = true;
         for (auto& row : fSecOv) for (float& v : row) v = kNoEdit;
         ownLoadLibrary();
+        loadTried();
+        if (untriedIn(kNewCat) > 0) fCat = kNewCat;   // first time with the new sounds: show them
         computePeaks();
         buildKnobs();
+        fDrop = gf::registerFileDrop(getWindow().getNativeWindowHandle());   // drag a file from FL's browser or Explorer onto the window
     }
 
     ~LumenUI() override
     {
         if (fJob) { fJob->cancel.store(true); if (fJob->th.joinable()) fJob->th.join(); }
+        gf::unregisterFileDrop(fDrop);
         saveZoom();
     }
 
@@ -187,6 +194,16 @@ protected:
         fLastIdle = now;
         fPulse += dt;
         pollRender();
+        {   // files dropped onto the window
+            const bool hv = gf::fileDropHover(fDrop);
+            if (hv != fDropHover) { fDropHover = hv; repaint(); }
+            std::string path;
+            if (gf::takeDroppedFile(fDrop, path)) {
+                setState("sample", path.c_str());     // the DSP loads it (and saves the path with the project)
+                stateChanged("sample", path.c_str()); // and so does the editor (waveform, name, or a message if it can't)
+                if (!fBuiltin && fName == gf::fileNameOf(path.c_str())) toast("Loaded " + fName);
+            }
+        }
         if (fStopHold > 0) { fStopHold -= dt; if (fStopHold <= 0) repaint(); }
         if (fToastTime > 0) fToastTime = std::max(0, fToastTime - (int)std::lround(dt * 30));
         // a one-shot that finished: pop the Play button back out
@@ -317,6 +334,13 @@ protected:
         if (fPage == kPageEdit) drawEdit(); else if (fPage == kPageTimeline) drawTimeline(); else drawBrowser();
         drawChain();
         if (fNaming) drawNameBox();
+        if (fDropHover) {   // a file hovers over the window: show where it goes
+            beginPath(); rect(0, 0, W, H); fillColor(10, 7, 14, 200); fill();
+            beginPath(); roundedRect(40, 40, W - 80, H - 80, 24); strokeColor(255, 170, 150, 230); strokeWidth(3); stroke();
+            beginPath(); roundedRect(40, 40, W - 80, H - 80, 24); fillPaint(radialGradient(W * 0.5f, H * 0.5f, 40, 520, Color(255, 120, 150, 0.18f), Color(0, 0, 0, 0))); fill();
+            txt(W * 0.5f, H * 0.5f - 14, "DROP TO LOAD", cText, 26, ALIGN_CENTER | ALIGN_MIDDLE, fFontBold, 5.0f);
+            txt(W * 0.5f, H * 0.5f + 22, "audio or video \xC2\xB7 the sound you have stays the same", cPeach, 11, ALIGN_CENTER | ALIGN_MIDDLE, fFontSemi, 0.4f);
+        }
         if (fV[kOriginal] > 0.5f) {
             beginPath(); rect(16, 232, 1068, 516); fillColor(12, 8, 16, 180); fill();
             txt(W * 0.5f, 450, "ORIGINAL SOUND IS ON", cPeach, 15, ALIGN_CENTER | ALIGN_MIDDLE, fFontBold, 2.2f);
@@ -338,7 +362,7 @@ protected:
     {
         drawLogo(32, 31);
         txt(58, 29, "LUMEN", cText, 19, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 4.0f);
-        txt(59, 48, "SAMPLE FX INSTRUMENT  \xC2\xB7  1.4", cDim, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 1.6f);
+        txt(59, 48, "SAMPLE FX INSTRUMENT  \xC2\xB7  1.5", cDim, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 1.6f);
         {
             const bool on = fV[kOriginal] > 0.5f;
             beginPath(); roundedRect(rOrig.x, rOrig.y, rOrig.w, rOrig.h, 11);
@@ -435,12 +459,14 @@ protected:
     // sounds: the built-in ones (0..kNumPresets-1), then your own (kOwnBase..)
     int catCount(int c) const {
         if (c == kOwnCat) return ownCount();
+        if (c == kNewCat) return kNumPresets - kFirstNew;
         int n = 0; for (int i = 0; i < kNumPresets; ++i) if (c < 0 || kPresets[i].cat == c) ++n;
         return c < 0 ? n + ownCount() : n;
     }
     int catNth(int c, int k) const {
         if (k < 0) return -1;
         if (c == kOwnCat) return ownNth(k);
+        if (c == kNewCat) return k < kNumPresets - kFirstNew ? kFirstNew + k : -1;
         int n = 0; for (int i = 0; i < kNumPresets; ++i) if (c < 0 || kPresets[i].cat == c) { if (n == k) return i; ++n; }
         return c < 0 ? ownNth(k - n) : -1;
     }
@@ -453,21 +479,27 @@ protected:
     void drawBrowser()
     {
         card(rCats); title(rCats.x + 14, rCats.y + 17, "CATEGORIES");
-        for (int i = 0; i <= kUiCats; ++i) {
+        for (int i = 0; i < kCatRows; ++i) {
             const Rect rr = catRow(i);
-            const int c = i - 1;
+            const int c = rowCat(i);
             const bool sel = fCat == c;
             const bool hasCur = c >= 0 && presetAt(tlActive() ? secSound(fSel) : cur()).cat == c;
             beginPath(); roundedRect(rr.x, rr.y, rr.w, rr.h, 9);
             if (sel) { accent(rr.x, rr.y, rr.x + rr.w, rr.y + rr.h, 0.95f); fill(); }
             else if (fHoverCat == i) { fillColor(255, 255, 255, 12); fill(); }
-            txt(rr.x + 12, rr.cy() + 0.5f, c < 0 ? "ALL SOUNDS" : catName(c), sel ? cInk : (c == kOwnCat ? cPeach : cText), 9, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 0.9f);
+            txt(rr.x + 12, rr.cy() + 0.5f, c == -1 ? "ALL SOUNDS" : catName(c), sel ? cInk : (c == kOwnCat || c == kNewCat ? cPeach : cText), 9, ALIGN_LEFT | ALIGN_MIDDLE, fFontBold, 0.9f);
             char b[8]; std::snprintf(b, sizeof b, "%d", catCount(c));
-            txt(rr.x + rr.w - 12, rr.cy() + 0.5f, b, sel ? cInk : cDim, 8.5f, ALIGN_RIGHT | ALIGN_MIDDLE, fFontSemi, 0.3f);
-            if (hasCur && !sel) { beginPath(); circle(rr.x + rr.w - 30, rr.cy(), 3); fillC(cRose); fill(); }
+            if (!sel && c != -1 && c != kNewCat && untriedIn(c) > 0) {   // new sounds inside: the count becomes a small glowing pill
+                const float pw = 24, ph = 13, px = rr.x + rr.w - 6 - pw;
+                beginPath(); roundedRect(px, rr.cy() - ph * 0.5f, pw, ph, ph * 0.5f);
+                fillPaint(linearGradient(px, 0, px + pw, 0, Color(255, 196, 128), Color(255, 120, 150))); fill();
+                txt(px + pw * 0.5f, rr.cy() + 0.5f, b, cInk, 8, ALIGN_CENTER | ALIGN_MIDDLE, fFontBold, 0.3f);
+            } else
+                txt(rr.x + rr.w - 12, rr.cy() + 0.5f, b, sel ? cInk : cDim, 8.5f, ALIGN_RIGHT | ALIGN_MIDDLE, fFontSemi, 0.3f);
+            if (hasCur && !sel) { beginPath(); circle(rr.x + rr.w - 38, rr.cy(), 3); fillC(cRose); fill(); }
         }
         card(rList);
-        char t[64]; std::snprintf(t, sizeof t, "%s  \xC2\xB7  %d SOUND%s", fCat < 0 ? "ALL SOUNDS" : catName(fCat), catCount(fCat), catCount(fCat) == 1 ? "" : "S");
+        char t[64]; std::snprintf(t, sizeof t, "%s  \xC2\xB7  %d SOUND%s", fCat == -1 ? "ALL SOUNDS" : catName(fCat), catCount(fCat), catCount(fCat) == 1 ? "" : "S");
         title(rList.x + 14, rList.y + 17, t);
         if (catCount(fCat) > 18) txt(rList.x + rList.w - 14, rList.y + 17, "scroll for more", cDim, 8, ALIGN_RIGHT | ALIGN_MIDDLE, fFontMed, 0.3f);
         save(); scissor(rList.x + 4, rList.y + 32, rList.w - 8, rList.h - 38);
@@ -481,6 +513,7 @@ protected:
             if (sel) { accent(tr.x, tr.y, tr.x + tr.w, tr.y + tr.h); fill(); }
             else { fillColor(255, 255, 255, hov ? 22 : 9); fill(); strokeColor(255, 255, 255, hov ? 40 : 14); strokeWidth(1); stroke(); }
             txt(tr.x + 12, tr.y + 15, presetAt(idx).name, sel ? cInk : cText, 10.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 0.3f);
+            if (untried(idx)) newBadge(tr.x + tr.w - 22, tr.y + 13, 1.0f);
             txt(tr.x + 12, tr.y + 29, fCat < 0 ? catName(presetAt(idx).cat) : moduleSummary(idx).c_str(), sel ? Col{ 90, 40, 60 } : cDim, 7.5f, ALIGN_LEFT | ALIGN_MIDDLE, fFontMed, 0.6f);
         }
         if (n == 0 && fCat == kOwnCat)
@@ -564,7 +597,7 @@ protected:
                 const Rect tr = toggleRect(m);
                 pill(tr, L.toggleLabel, e[L.toggle] > 0.5f, 7.5f);
             }
-            if (L.seg >= 0) segmented(segRect(m), L.segNames, L.segN, (int)e[L.seg], L.segN > 5 ? 7.0f : 8.0f);
+            if (L.seg >= 0) segmented(segRect(m), L.segNames, L.segN, (int)e[L.seg], L.segN > 7 ? 6.3f : L.segN > 5 ? 7.0f : 8.0f);
             if (!on) { beginPath(); roundedRect(c.x, c.y + 28, c.w, c.h - 28, 12); fillColor(20, 14, 26, 150); fill(); }
         }
         for (size_t i = 0; i < fKnobs.size(); ++i) if (fKnobs[i].macro < 0) drawKnob((int)i, q, e);
@@ -628,7 +661,15 @@ protected:
         case kGSize: case kRPre: std::snprintf(b, n, "%.0f ms", v); return;
         case kGDens: std::snprintf(b, n, "%.1f /s", v); return;
         case kGPitch: case kPA: case kPB: std::snprintf(b, n, std::fabs(v - std::round(v)) < 0.01f ? "%+.0f st" : "%+.2f st", v); return;
-        case kFCut: if (v >= 1000) std::snprintf(b, n, "%.1f kHz", v / 1000); else std::snprintf(b, n, "%.0f Hz", v); return;
+        case kFCut: {
+            const int ft = (int)(fPatSrc ? fPatSrc : fV)[kFType];
+            if (ft == 4) {   // COMB: the note it rings at
+                static const char* nn[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+                const int m = (int)std::lround(69 + 12 * std::log2(std::max(20.0f, v) / 440.0f));
+                std::snprintf(b, n, "%s%d \xC2\xB7 %.0f Hz", nn[((m % 12) + 12) % 12], m / 12 - 1, v); return;
+            }
+            if (ft == 5) { static const char* vw[5] = { "A", "E", "I", "O", "U" }; const float pos = std::max(0.0f, std::min(4.0f, std::log2(std::max(20.0f, v) / 150.0f) * 0.75f)); std::snprintf(b, n, "vowel %s", vw[(int)std::lround(pos)]); return; }
+            if (v >= 1000) std::snprintf(b, n, "%.1f kHz", v / 1000); else std::snprintf(b, n, "%.0f Hz", v); return; }
         case kFRate: case kMRate: std::snprintf(b, n, v < 1 ? "%.2f Hz" : "%.1f Hz", v); return;
         case kFEnv: std::snprintf(b, n, "%+.0f %%", v * 100); return;
         case kLBits: std::snprintf(b, n, "%.1f bit", v); return;
@@ -798,7 +839,7 @@ protected:
             return true;
         }
         if (fPage == kPageSounds) {
-            for (int i = 0; i <= kUiCats; ++i) if (catRow(i).contains(x, y)) { fCat = i - 1; fScrollRows = 0; repaint(); return true; }
+            for (int i = 0; i < kCatRows; ++i) if (catRow(i).contains(x, y)) { fCat = rowCat(i); fScrollRows = 0; repaint(); return true; }
             if (rList.contains(x, y) && y > rList.y + 32) {
                 const int n = catCount(fCat);
                 for (int t = 0; t < n; ++t) if (tile(t).contains(x, y)) {
@@ -886,7 +927,7 @@ protected:
         // hover
         int hk = knobAt(x, y), ht = -1, hc = -1;
         if (fPage == kPageSounds) {
-            for (int i = 0; i <= kUiCats; ++i) if (catRow(i).contains(x, y)) hc = i;
+            for (int i = 0; i < kCatRows; ++i) if (catRow(i).contains(x, y)) hc = i;
             if (rList.contains(x, y) && y > rList.y + 32) { const int n = catCount(fCat); for (int t = 0; t < n; ++t) if (tile(t).contains(x, y)) ht = listIndex(t); }
         }
         if (fPage == kPageTimeline) ht = fHoverTile;   // set by the timeline page
@@ -1087,8 +1128,42 @@ private:
         return dup;
     }
     uint fLastKey = 0; double fLastKeyTime = 0;
+    // ---- NEW badges: a new sound keeps its badge until you have tried it once (remembered in Documents/Lumen)
+    std::vector<uint8_t> fTried;
+    gf::FileDropTarget* fDrop = nullptr; bool fDropHover = false;
+    static std::string triedFile() {
+#ifdef _WIN32
+        return gf::documentsFolder("Lumen") + "\\tried.txt";
+#else
+        return gf::documentsFolder("Lumen") + "/tried.txt";
+#endif
+    }
+    void loadTried() {
+        fTried.assign((size_t)kNumPresets, 0);
+        std::string t; if (!gf::readTextFile(triedFile(), t)) return;
+        size_t a = 0;
+        while (a < t.size()) { size_t b = t.find('\n', a); if (b == std::string::npos) b = t.size(); std::string ln = t.substr(a, b - a); if (!ln.empty() && ln.back() == '\r') ln.pop_back();
+            for (int i = kFirstNew; i < kNumPresets; ++i) if (ln == kPresets[i].name) fTried[(size_t)i] = 1;
+            a = b + 1; }
+    }
+    void markTried(int idx) {
+        if (idx < kFirstNew || idx >= kNumPresets || fTried.empty() || fTried[(size_t)idx]) return;
+        fTried[(size_t)idx] = 1;
+        std::string t; for (int i = kFirstNew; i < kNumPresets; ++i) if (fTried[(size_t)i]) { t += kPresets[i].name; t += "\n"; }
+        gf::writeTextFile(triedFile(), t);
+    }
+    bool untried(int idx) const { return idx >= kFirstNew && idx < kNumPresets && !fTried.empty() && !fTried[(size_t)idx]; }
+    int untriedIn(int c) const { int n = 0; for (int i = kFirstNew; i < kNumPresets; ++i) if (untried(i) && (c == kNewCat || c < 0 || kPresets[i].cat == c)) ++n; return n; }
+    void newBadge(float cx, float cy, float sc) {
+        const float w = 30 * sc, h = 13 * sc;
+        beginPath(); roundedRect(cx - w * 0.5f, cy - h * 0.5f, w, h, h * 0.5f);
+        fillPaint(linearGradient(cx - w * 0.5f, cy, cx + w * 0.5f, cy, Color(255, 196, 128), Color(255, 120, 150))); fill();
+        txt(cx, cy + 0.5f, "NEW", cInk, 7.5f * sc, ALIGN_CENTER | ALIGN_MIDDLE, fFontBold, 1.0f);
+    }
+
     void loadPreset(int idx)
     {
+        markTried(idx);
         float p[kParamCount]; presetValues(idx, p);
         for (uint32_t i = 0; i < kNumIn; ++i) { if (presetKeeps(i)) continue; if (fV[i] != p[i]) { fV[i] = p[i]; setParameterValue(i, p[i]); } }
         toast(std::string("Sound: ") + presetAt(idx).name);
@@ -1122,6 +1197,7 @@ private:
         std::memcpy(fSecOv[to], fSecOv[from], sizeof fSecOv[0]);   // the section's edits move with it
     }
     void assignSound(int s, int idx) {
+        markTried(idx);
         setParam(slotParam(s, kSfSound), (float)idx, true);
         for (int m = 0; m < 4; ++m) setParam(slotParam(s, kSfM1 + m), presetAt(idx).mdef[m], true);
         if (secEdited(s, false)) { for (float& v : fSecOv[s]) v = kNoEdit; sendEdits(); }   // a new sound starts without edits
@@ -1294,6 +1370,7 @@ private:
             save(); scissor(tr.x, tr.y, tr.w - 30, tr.h);
             txt(tr.x + 12, tr.cy() + 0.5f, presetAt(idx).name, sel ? cInk : cText, 10, ALIGN_LEFT | ALIGN_MIDDLE, fFontSemi, 0.3f);
             restore();
+            if (untried(idx)) newBadge(tr.x + tr.w - 46, tr.cy(), 0.85f);
             const Rect pb = tilePlay(tI);
             playGlyph(pb.cx(), pb.cy(), 9, fHoverPrev == 100 + tI, sel ? Col{ 255, 255, 255 } : sc);
         }

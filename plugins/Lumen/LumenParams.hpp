@@ -58,13 +58,13 @@ enum : uint32_t { F_INT = 1, F_LOG = 2, F_BOOL = 4, F_OUT = 8 };
     X(kPDry,      "Pitch Dry",         "p_dry",       0, 1, 1, 0) \
     /* 3 DRIVE */ \
     X(kDOn,       "Drive On",          "d_on",        0, 1, 0, F_INT | F_BOOL) \
-    X(kDMode,     "Drive Mode",        "d_mode",      0, 4, 0, F_INT) \
+    X(kDMode,     "Drive Mode",        "d_mode",      0, 5, 0, F_INT) \
     X(kDAmt,      "Drive Amount",      "d_amt",       0, 1, 0.4f, 0) \
     X(kDTone,     "Drive Tone",        "d_tone",      0, 1, 0.6f, 0) \
     X(kDMix,      "Drive Mix",         "d_mix",       0, 1, 1, 0) \
     /* 4 FILTER */ \
     X(kFOn,       "Filter On",         "f_on",        0, 1, 0, F_INT | F_BOOL) \
-    X(kFType,     "Filter Type",       "f_type",      0, 3, 0, F_INT) \
+    X(kFType,     "Filter Type",       "f_type",      0, 5, 0, F_INT) \
     X(kFCut,      "Filter Cutoff",     "f_cut",       20, 20000, 2000, F_LOG) \
     X(kFRes,      "Filter Reso",       "f_res",       0, 1, 0.2f, 0) \
     X(kFRate,     "Filter LFO Rate",   "f_rate",      0.02f, 20, 0.5f, F_LOG) \
@@ -81,7 +81,7 @@ enum : uint32_t { F_INT = 1, F_LOG = 2, F_BOOL = 4, F_OUT = 8 };
     X(kLAge,      "Lo-Fi Age",         "l_age",       0, 1, 0, 0) \
     /* 6 MOD */ \
     X(kMOn,       "Mod On",            "m_on",        0, 1, 0, F_INT | F_BOOL) \
-    X(kMType,     "Mod Type",          "m_type",      0, 6, 0, F_INT) \
+    X(kMType,     "Mod Type",          "m_type",      0, 7, 0, F_INT) \
     X(kMRate,     "Mod Rate",          "m_rate",      0.02f, 20, 0.6f, F_LOG) \
     X(kMDepth,    "Mod Depth",         "m_depth",     0, 1, 0.5f, 0) \
     X(kMFb,       "Mod Feedback",      "m_fb",        0, 0.95f, 0.3f, 0) \
@@ -212,9 +212,9 @@ inline void sectionWeights(const float* p, float x, float* amp)
 
 // ---- names
 inline constexpr const char* kKeysNames[]    = { "PITCH", "TRIGGER" };
-inline constexpr const char* kDriveNames[]   = { "SOFT", "HARD", "FOLD", "FUZZ", "TUBE" };
-inline constexpr const char* kFilterNames[]  = { "LP", "HP", "BP", "NOTCH" };
-inline constexpr const char* kModNames[]     = { "CHORUS", "FLANGER", "PHASER", "TREMOLO", "PAN", "RING", "VIBRATO" };
+inline constexpr const char* kDriveNames[]   = { "SOFT", "HARD", "FOLD", "FUZZ", "TUBE", "RECTIFY" };
+inline constexpr const char* kFilterNames[]  = { "LP", "HP", "BP", "NOTCH", "COMB", "VOWEL" };
+inline constexpr const char* kModNames[]     = { "CHORUS", "FLANGER", "PHASER", "TREMOLO", "PAN", "RING", "VIBRATO", "SHIFT" };
 inline constexpr const char* kStutNames[]    = { "REPEAT", "GATE", "TAPE STOP", "REVERSE", "HALF", "STUTTER" };
 // STUTTER mode: what PATTERN does
 inline constexpr const char* kRollNames[] = { "1/16 ROLL", "1/32 ROLL", "1/64 BUZZ", "TRIPLETS", "SPEED UP", "SLOW DOWN", "RIPPLE", "SCATTER" };

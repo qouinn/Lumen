@@ -154,6 +154,7 @@ struct Drive {
         case 2: return std::sin(x * 1.3f);
         case 3: { const float y = x > 0 ? 1.0f - std::exp(-x * 1.4f) : -(1.0f - std::exp(x * 2.2f)) * 0.75f; return y; }
         case 4: { const float y = x / (1.0f + std::fabs(x)); return y + 0.18f * y * y; }
+        case 5: { const float r = std::tanh(std::fabs(x) * 1.2f); return (r - 0.45f) * 1.5f + 0.22f * std::tanh(x); }   // RECTIFY: octave-up fuzz
         default: return std::tanh(x);
         }
     }
@@ -174,21 +175,46 @@ struct Drive {
     }
 };
 
-// 4 FILTER with LFO and envelope follower
+// 4 FILTER with LFO and envelope follower: LP / HP / BP / NOTCH, COMB (a resonator tuned to the cutoff) and VOWEL (a talking formant filter)
 struct Filter {
-    SVF l, r; float lfo = 0, env = 0, sr = 44100;
-    void init(float s) { sr = s; reset(); }
-    void reset() { l.reset(); r.reset(); env = 0; }
+    SVF l, r, fl[3], fr[3]; Ring cl, cr; OnePole dampL, dampR; float lfo = 0, env = 0, sr = 44100, fg[3] = { 0, 0, 0 }, fk[3] = { 0.3f, 0.3f, 0.3f }, fgain[3] = { 1, 0.6f, 0.3f }; int ctr = 0;
+    void init(float s) { sr = s; cl.init((size_t)(s * 0.06f)); cr.init((size_t)(s * 0.06f)); reset(); }
+    void reset() { l.reset(); r.reset(); for (int i = 0; i < 3; ++i) { fl[i].reset(); fr[i].reset(); } cl.clear(); cr.clear(); dampL.z = dampR.z = 0; env = 0; ctr = 0; }
+    // a e i o u: the first three formants
+    static void vowel(float pos, float f[3]) {
+        static const float V[5][3] = { { 800, 1150, 2800 }, { 400, 1600, 2700 }, { 300, 2250, 3000 }, { 450, 800, 2830 }, { 325, 700, 2530 } };
+        pos = std::max(0.0f, std::min(3.999f, pos)); const int i = (int)pos; const float t = pos - i;
+        for (int k = 0; k < 3; ++k) f[k] = V[i][k] * std::pow(V[i + 1][k] / V[i][k], t);
+    }
     inline void process(float& L, float& R, const float* q) {
         lfo += q[kFRate] / sr; if (lfo >= 1) lfo -= 1;
         const float a = std::fabs(L) + std::fabs(R);
         env += (a - env) * (a > env ? 0.004f : 0.0004f);
         const float oct = std::sin(2 * kPi * lfo) * q[kFDepth] * 4.0f + q[kFEnv] * std::min(1.0f, env * 2.0f) * 5.0f;
         const float fc = std::min(sr * 0.45f, std::max(20.0f, q[kFCut] * std::pow(2.0f, oct)));
+        const int type = (int)q[kFType];
+        if (type == 4) {   // COMB: the signal rings at the cutoff frequency (and its overtones)
+            const float fb = 0.55f + 0.44f * q[kFRes], d = std::max(2.0f, std::min((float)cl.mask - 4, sr / std::max(25.0f, fc)));
+            const float da = onePoleCoef(3500.0f + 9000.0f * (1 - q[kFRes]), sr);
+            const float yl = L + fb * dampL.lp(cl.frac(d - 1), da), yr = R + fb * dampR.lp(cr.frac(d * 1.003f - 1), da);
+            cl.push(std::tanh(yl)); cr.push(std::tanh(yr));
+            L = yl * (1 - fb * 0.6f); R = yr * (1 - fb * 0.6f);
+            return;
+        }
+        if (type == 5) {   // VOWEL: the cutoff walks a - e - i - o - u
+            if ((ctr++ & 15) == 0) {
+                float f[3]; vowel((std::log2(fc / 150.0f)) * 0.75f, f);
+                for (int k = 0; k < 3; ++k) { fg[k] = std::tan(kPi * std::min(f[k], sr * 0.45f) / sr); fk[k] = 0.32f - 0.24f * q[kFRes]; }
+            }
+            float oL = 0, oR = 0;
+            for (int k = 0; k < 3; ++k) { float lp, bp, hp; fl[k].run(L, fg[k], fk[k], lp, bp, hp); oL += bp * fk[k] * fgain[k] * 2.2f; fr[k].run(R, fg[k], fk[k], lp, bp, hp); oR += bp * fk[k] * fgain[k] * 2.2f; }
+            L = oL; R = oR;
+            return;
+        }
         const float g = std::tan(kPi * fc / sr), k = 2.0f - 1.94f * q[kFRes];
         float lp, bp, hp, lp2, bp2, hp2;
         l.run(L, g, k, lp, bp, hp); r.run(R, g, k, lp2, bp2, hp2);
-        switch ((int)q[kFType]) {
+        switch (type) {
         case 1: L = hp; R = hp2; break;
         case 2: L = bp * k; R = bp2 * k; break;
         case 3: L = lp + hp; R = lp2 + hp2; break;
@@ -235,11 +261,25 @@ struct LoFi {
     }
 };
 
-// 6 MOD: chorus, flanger, phaser, tremolo, pan, ring, vibrato
+// a pair of allpass chains whose outputs are 90 degrees apart (for the frequency shifter)
+struct Hilbert {
+    float x1[8] = { 0 }, x2[8] = { 0 }, y1[8] = { 0 }, y2[8] = { 0 }, d = 0;   // (Niemitalo's 90-degree pair)
+    void reset() { for (int i = 0; i < 8; ++i) x1[i] = x2[i] = y1[i] = y2[i] = 0; d = 0; }
+    inline void run(float x, float& re, float& im) {
+        static const float c[8] = { 0.6923878f * 0.6923878f, 0.9360654322959f * 0.9360654322959f, 0.9882295226860f * 0.9882295226860f, 0.9987488452737f * 0.9987488452737f,
+                                    0.4021921162426f * 0.4021921162426f, 0.8561710882420f * 0.8561710882420f, 0.9722909545651f * 0.9722909545651f, 0.9952884791278f * 0.9952884791278f };
+        float a = x, b = x;
+        for (int i = 0; i < 4; ++i) { const float o = c[i] * (a + y2[i]) - x2[i]; x2[i] = x1[i]; x1[i] = a; y2[i] = y1[i]; y1[i] = o; a = o; }
+        for (int i = 4; i < 8; ++i) { const float o = c[i] * (b + y2[i]) - x2[i]; x2[i] = x1[i]; x1[i] = b; y2[i] = y1[i]; y1[i] = o; b = o; }
+        re = d; d = a; im = b;   // the first path one sample later
+    }
+};
+
+// 6 MOD: chorus, flanger, phaser, tremolo, pan, ring, vibrato, frequency SHIFT
 struct Mod {
-    Ring dl, dr; float lfo = 0, car = 0, fbl = 0, fbr = 0, zl[6] = { 0 }, zr[6] = { 0 }, sr = 44100;
+    Ring dl, dr; float lfo = 0, car = 0, fbl = 0, fbr = 0, zl[6] = { 0 }, zr[6] = { 0 }, sr = 44100; double sph = 0; Hilbert hl, hr;
     void init(float s) { sr = s; dl.init((size_t)(s * 0.06f)); dr.init((size_t)(s * 0.06f)); reset(); }
-    void reset() { dl.clear(); dr.clear(); fbl = fbr = 0; for (int i = 0; i < 6; ++i) zl[i] = zr[i] = 0; }
+    void reset() { dl.clear(); dr.clear(); fbl = fbr = 0; for (int i = 0; i < 6; ++i) zl[i] = zr[i] = 0; hl.reset(); hr.reset(); sph = 0; }
     inline void process(float& L, float& R, const float* q) {
         const int type = (int)q[kMType];
         const float rate = q[kMRate], depth = q[kMDepth], fb = q[kMFb], mix = q[kMMix];
@@ -271,6 +311,16 @@ struct Mod {
         case 3: { const float g = 1.0f - depth * (0.5f + 0.5f * s1); wl = L * g; wr = R * g; break; }
         case 4: { const float p = s1 * depth; wl = L * std::sqrt(0.5f * (1 - p)) * 1.4142f; wr = R * std::sqrt(0.5f * (1 + p)) * 1.4142f; break; }
         case 5: { car += rate * 100.0f / sr; if (car >= 1) car -= 1; const float c = std::sin(2 * kPi * car); wl = L * c; wr = R * c; break; }
+        case 7: {   // SHIFT: every frequency moves by the same number of Hz (DEPTH: below the middle down, above up; RATE: how far)
+            const float dd = (depth - 0.5f) * 2.0f, hz = dd * rate * (1.0f + 30.0f * dd * dd);
+            sph += hz / sr; sph -= std::floor(sph);
+            const float cs = std::cos(2 * kPi * (float)sph), sn = std::sin(2 * kPi * (float)sph);
+            dl.push(fbl); dr.push(fbr);
+            const float inL = L + std::tanh(dl.frac(0.03f * sr)) * fb, inR = R + std::tanh(dr.frac(0.034f * sr)) * fb;   // feedback: endless spirals
+            float re, im; hl.run(inL, re, im); wl = re * cs + im * sn;
+            hr.run(inR, re, im); wr = im * cs - re * sn;   // the right side a quarter turn later: wide
+            fbl = wl; fbr = wr;
+            break; }
         default: {  // vibrato
             dl.push(L); dr.push(R);
             const float base = 0.006f * sr, dep = depth * 0.005f * sr;
